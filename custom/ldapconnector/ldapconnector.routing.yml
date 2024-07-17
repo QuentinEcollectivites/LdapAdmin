@@ -1,0 +1,25 @@
+
+ldapconnector.settings:
+  path: '/admin/config/system/ldapconnector/settings'
+  defaults:
+    _form: '\Drupal\ldapconnector\Form\LdapSettingsForm'
+    _title: 'LDAP Connector Settings'
+  requirements:
+    _permission: 'administer site configuration'
+
+ldapconnector.admin:
+  path: '/admin/config/system/ldapconnector'
+  defaults:
+    _title: 'LDAP Connector Settings'
+    _form: '\Drupal\ldapconnector\Form\LdapSettingsForm'
+  requirements:
+    _permission: 'administer site configuration'
+
+ldapconnector.listEntries:
+  path: '/list_users_by_collectivite'
+  defaults:
+    _title: 'LDAP List for Admin Group'
+    _controller: '\Drupal\ldapconnector\Controller\LdapController::listEntries'
+  requirements:
+    _permission: 'access content'
+

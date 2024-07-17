@@ -1,0 +1,6 @@
+ldapconnector.admin:
+  title: 'LDAP Connector module settings'
+  description: 'Page de configuration du module LDAP connector'
+  parent: system.admin_config_system
+  route_name: ldapconnector.settings
+  weight: 101

@@ -1,0 +1,1291 @@
+<?php
+
+global $headers;
+$headers = array();
+$headers[] = "Accept-Encoding: gzip, deflate, sdch, br";
+$headers[] = "Accept-Language: fr-FR,fr;q=0.8,en-US;q=0.6,en;q=0.4";
+$headers[] = "Upgrade-Insecure-Requests: 1";
+$headers[] = "User-Agent: Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36";
+$headers[] = "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8";
+$headers[] = "Connection: keep-alive";
+$headers[] = "Cache-Control: max-age=0";
+
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\user\Entity\User;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
+
+
+function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_id)
+{
+        // dpm($form);
+        $messenger = \Drupal::messenger();
+        $current_user_id = \Drupal::currentUser()->id();
+        $current_user = \Drupal\user\Entity\User::load($current_user_id);
+        $roles = $current_user->getRoles();
+        $current_user_grp_applis = $current_user->get('field_groupes_applicatifs')->getValue();
+
+        if ($form_id == 'user_form') {
+
+                $form['account']['cas_enabled']['#default_value'] = TRUE;
+                $form['account']['cas_enabled']['#disabled'] = TRUE;
+                $current_path = \Drupal::service('path.current')->getPath();
+
+                if ((!in_array('administrator', $roles) && !in_array('admin_pleiade', $roles))) {
+                        $form['field_collectivite']['widget']['#disabled'] = TRUE;
+                        $form['#attached']['library'][] = 'ldapconnector/ldapconnector_add_user';
+                        $form['account']['notify']['#default_value'] = TRUE;
+                }
+                
+
+                
+                $current_user_collectivite = $current_user->get('field_collectivite')->getValue()[0]["target_id"];
+
+                if (!empty($current_user_collectivite)) {
+
+                        $name_of_edit_profile = $form["account"]["name"]["#default_value"];
+                        $users = \Drupal::entityTypeManager()->getStorage('user')->loadByProperties(['name' => $name_of_edit_profile]);
+
+                        if (!empty($users)) {
+                                $user = reset($users);
+                                $user_collectivite = $user->get('field_collectivite')->getValue()[0]["target_id"];
+                        }
+
+                        foreach ($current_user_grp_applis as $group) {
+                                if ($group['target_id'] == '154') {
+                                        $autorisé = 1;
+                                        
+                                }
+                        }
+
+                        if (($user_collectivite != $current_user_collectivite && $autorisé == 1 && !in_array('administrator', $roles) && !in_array('admin_pleiade', $roles))) {
+                                $confirm = $autorisé . ' Vous n\'etes pas autorisé à modifier ce profil';
+                                $messenger->addMessage($confirm, 'error');
+                                // Disable the form access.
+                                $form['#access'] = FALSE;
+                        }
+                }
+                $coll_options = get_all_coll();
+                $roles_options = get_all_role();
+
+                $form['#attached']['library'][] = 'ldapconnector/ldapconnector_add_user';
+
+                $form['user_details'] = [
+                        '#type' => 'fieldset',
+                        '#title' => t('Informations Pastell'),
+                        '#tree' => TRUE,
+                        '#prefix' => '<div id="user-details-wrapper">',
+                        '#suffix' => '</div>',
+                        '#weight' => 99,
+                ];
+
+                $num_groups = $form_state->get('num_user_detail_groups') ?: 0;
+
+                if ($form['field_entite_role_pastell']["widget"][0]['value']["#default_value"] !== null) {
+                $json_user_details = $form['field_entite_role_pastell']["widget"][0]['value']["#default_value"];
+                $user_details = json_decode($json_user_details, true);
+                if($user_details){
+                        $num_groups = max($num_groups, count($user_details));
+                }
+                }
+
+                $form_state->set('num_user_detail_groups', $num_groups);
+
+                // Définir les valeurs par défaut pour les champs user_details
+                for ($i = 0; $i < $num_groups; $i++) {
+                        $form['user_details'][$i] = [
+                                '#type' => 'fieldset',
+                                '#title' => t('Entité Pastell @index', ['@index' => $i + 1]),
+                        ];
+
+                        $form['user_details'][$i]['field_entite'] = [
+                                '#type' => 'select',
+                                '#title' => t('Entité'),
+                                '#options' => $coll_options,
+                                '#required' => FALSE,
+                                '#multiple' => FALSE,
+                                '#default_value' => $user_details[$i]['field_entite'],
+                        ];
+                        $form['user_details'][$i]['field_role'] = [
+                                '#type' => 'checkboxes',
+                                '#title' => t('Rôle'),
+                                '#options' => $roles_options,
+                                '#required' => FALSE,
+                                '#multiple' => TRUE,
+                                '#default_value' => $user_details[$i]['field_role'],
+                        ];
+                }
+
+                $form['actions']['add_user_detail_group'] = [
+                        '#type' => 'submit',
+                        '#value' => t('Ajouter une Entité pastell'),
+                        '#submit' => ['ldapconnector_add_user_detail_group'],
+                        '#ajax' => [
+                                'callback' => 'ldapconnector_add_user_detail_group_ajax_callback',
+                                'wrapper' => 'user-details-wrapper',
+                        ],
+                ];
+
+                $form['#submit'][] = 'custom_form_submit';
+
+                if ($form['field_entite_role_pastell']["widget"][0]['value']["#default_value"] !== null) {
+                        // // Charger les valeurs JSON stockées dans le champ field_entite_role_pastell
+                        $json_user_details = $form['field_entite_role_pastell']["widget"][0]['value']["#default_value"];
+
+                        // Décoder les valeurs JSON en tableau associatif
+                        $user_details = json_decode($json_user_details, true);
+
+                        // Définir les valeurs par défaut pour les champs user_details
+                        if($user_details){
+                        $num_groups = count($user_details);
+                        for ($i = 0; $i < $num_groups; $i++) {
+                                $form['user_details'][$i]['field_entite']['#default_value'] = $user_details[$i]['field_entite'];
+                                $form['user_details'][$i]['field_role']['#default_value'] = $user_details[$i]['field_role'];
+                        }
+
+                        // Mettre à jour le nombre de groupes de détails utilisateur
+                        $form_state->set('num_user_detail_groups', $num_groups);
+                }
+                }
+        }
+        if ($form_id == 'taxonomy_term_collectivite_form' || $form_id == 'taxonomy_term_groupe_applicatif_form') {
+
+                $form['#attached']['library'][] = 'ldapconnector/ldapconnector_add_coll';
+        }
+        if ($autorisé == 1 && !in_array('administrator', $roles) && !in_array('admin_pleiade', $roles)) {
+                $form['account']['roles']['#disabled'] = TRUE; 
+                $form['field_collectivite']['widget']['#disabled'] = TRUE;  
+        }
+       
+        if ($form_id == 'user_register_form') {
+                $coll_options = get_all_coll();
+                $roles_options = get_all_role();
+
+                $form['account']['cas_enabled']['#default_value'] = TRUE;
+                $form['account']['cas_enabled']['#disabled'] = TRUE;
+                $form['account']['notify']['#default_value'] = TRUE;
+                $form['#attached']['library'][] = 'ldapconnector/ldapconnector_add_user';
+                $form['account']['mail']['#required'] = TRUE;
+                $form['account']['pass']['#disabled'] = TRUE;
+                $form['user_details'] = [
+                        '#type' => 'fieldset',
+                        '#title' => t('Informations Pastell'),
+                        '#tree' => TRUE,
+                        '#prefix' => '<div id="user-details-wrapper">',
+                        '#suffix' => '</div>',
+                        '#weight' => 99,
+                ];
+
+                $num_groups = $form_state->get('num_user_detail_groups') ?: 1;
+
+                for ($i = 0; $i < $num_groups; $i++) {
+                        $form['user_details'][$i] = [
+                                '#type' => 'fieldset',
+                                '#title' => t('Entité Pastell @index', ['@index' => $i + 1]),
+                        ];
+
+                        $form['user_details'][$i]['field_entite'] = [
+                                '#type' => 'select',
+                                '#title' => t('Entité'),
+                                '#options' => $coll_options,
+                                '#required' => FALSE,
+                                '#multiple' => FALSE,
+
+                        ];
+                        $form['user_details'][$i]['field_role'] = [
+                                '#type' => 'checkboxes',
+                                '#title' => t('Rôle'),
+                                '#options' => $roles_options,
+                                '#required' => FALSE,
+                                '#multiple' => TRUE,
+                        ];
+                }
+                $form['actions']['add_user_detail_group'] = [
+                        '#type' => 'submit',
+                        '#value' => t('Ajouter une Entité pastell'),
+                        '#submit' => ['ldapconnector_add_user_detail_group'],
+                        '#ajax' => [
+                                'callback' => 'ldapconnector_add_user_detail_group_ajax_callback',
+                                'wrapper' => 'user-details-wrapper',
+                        ],
+                ];
+        }
+}
+
+
+function ldapconnector_add_user_detail_group(array &$form, FormStateInterface $form_state) {
+    $num_groups = $form_state->get('num_user_detail_groups');
+    $form_state->set('num_user_detail_groups', $num_groups + 1);
+    $form_state->setRebuild(TRUE);
+}
+
+function ldapconnector_add_user_detail_group_ajax_callback(array &$form, FormStateInterface $form_state) {
+    return $form['user_details'];
+}
+function ldapconnector_user_presave(\Drupal\Core\Entity\EntityInterface $entity)
+{
+        if ($entity->isNew()) {
+                // Si c'est une nouvelle entité, ne faites rien ici
+                // car la valeur a déjà été définie programmatiquement
+                return;
+              }
+        $form_values = \Drupal::request()->request->all();
+        $user_details = $form_values['user_details'];
+        $json_user_details = json_encode($user_details);
+        $entity->set('field_entite_role_pastell', $json_user_details);
+}
+
+function get_all_coll()
+{
+        $options[0] = 'Sélectionnez une entité';
+        $ch = curl_init();
+
+        curl_setopt($ch, CURLOPT_URL, "pastelldev.ecollectivites.fr/api/list-entite.php");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+        global $headers;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+        if (curl_errno($ch)) {
+                drupal_set_message('Error:' . curl_error($ch));
+        }
+        curl_close($ch);
+        $result = json_decode($result);
+        // Parcourir les données et construire les options du champ select.
+        foreach ($result as $item) {
+                // Utilisation de la dénomination comme libellé et de l'id comme valeur de l'option.
+                $options[$item->id_e] = $item->denomination;
+        }
+        return $options;
+}
+function get_all_role()
+{
+
+        $ch = curl_init();
+
+        curl_setopt($ch, CURLOPT_URL, "pastelldev.ecollectivites.fr/api/list-roles.php");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+        global $headers;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+        if (curl_errno($ch)) {
+                drupal_set_message('Error:' . curl_error($ch));
+        }
+        curl_close($ch);
+        $result = json_decode($result);
+        // Parcourir les données et construire les options du champ select.
+        foreach ($result as $item) {
+
+                // Utilisation de la dénomination comme libellé et de l'id comme valeur de l'option.
+                $options[$item->role] = $item->libelle;
+        }
+        return $options;
+}
+function get_id_u_pastell(){
+        
+        $ch = curl_init();
+
+        $url = "https://pastelldev.ecollectivites.fr/api/list-utilisateur.php";
+
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+        global $headers;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+        if (curl_errno($ch)) {
+                drupal_set_message('Error:' . curl_error($ch));
+        }
+        curl_close($ch);
+        $results = json_decode($result);
+        return $results;
+}
+function add_user_to_pastell($account)
+{
+        $messenger = \Drupal::messenger();
+        $query_params = http_build_query([
+                'prenom' => $account->get('field_prenom')->getValue()[0]['value'],
+                'nom' => $account->get('field_nom')->getValue()[0]['value'],
+                'email' => $account->getEmail(),
+                'login' => $account->name->value,
+                'password' => '123456'
+        ]);
+
+        $ch = curl_init();
+
+        $url = "https://pastelldev.ecollectivites.fr/api/create-utilisateur.php?" . $query_params;
+
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+        global $headers;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+        $messenger->addMessage("Création de l'utilisateur sur Pastell : " . $result);
+        if (curl_errno($ch)) {
+                drupal_set_message('Error:' . curl_error($ch));
+        }
+        curl_close($ch);
+        $result = json_decode($result);
+        $account->set('field_id_utilisateur_pastell', $result->id_u);
+        $account->save();
+        return $result->id_u;
+}
+
+function add_roles_to_pastell_user($account, $id_u)
+{
+        $messenger = \Drupal::messenger();
+        $pastell = json_decode($account->get('field_entite_role_pastell')->getValue()[0]['value'], TRUE);
+
+        if ($pastell !== []) {
+                foreach ($pastell as $detail) {
+                        // Récupérer la valeur de field_entite
+                        $id_e = json_decode($detail['field_entite'], TRUE);
+                        // Boucler sur chaque valeur de field_role
+                        foreach ($detail['field_role'] as $role) {
+                                // Faire quelque chose avec $field_entite et $role
+
+                                $query_params = http_build_query([
+                                        'id_u' => $id_u,
+                                        'id_e' => $id_e,
+                                        'role' => $role
+                                ]);
+                                $ch = curl_init();
+
+                                $url = "https://pastelldev.ecollectivites.fr/api/add-several-role-utilisateur.php?" . $query_params;
+
+                                curl_setopt($ch, CURLOPT_URL, $url);
+                                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                                // curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+                                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                                curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+                                curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+                                curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+                                global $headers;
+                                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+                                $result = curl_exec($ch);
+                                $messenger->addMessage("Ajout des rôles sur Pastell : " . $result);
+                                if (curl_errno($ch)) {
+                                        drupal_set_message('Error:' . curl_error($ch));
+                                }
+                                curl_close($ch);
+                                $result = json_decode($result);
+                        }
+                }
+        }
+}
+function remove_role_pastell($account){
+        $messenger = \Drupal::messenger();
+        $email = $account->name->value;
+        $results = get_id_u_pastell();
+        $id_u = 0;
+        foreach($results as $resultat){
+                
+                if($email == $resultat->login){
+                        $messenger->addMessage("Récupération de l'utilisateur sur Pastell : " . $resultat->login);
+                        $id_u = $resultat->id_u;
+                        $messenger->addMessage("Récupération de l'utilisateur sur Pastell, id_u = : " . $resultat->id_u);
+                        break;
+                }
+        }
+
+        $ch = curl_init();
+
+        $url = "https://pastelldev.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u;
+
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        // curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+        global $headers;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+        
+        if (curl_errno($ch)) {
+                drupal_set_message('Error:' . curl_error($ch));
+        }
+        curl_close($ch);
+        $result = json_decode($result);
+        if ($result !== []) {
+                foreach ($result as $detail) {
+                        
+                                $ch = curl_init();
+                                
+                                $url = "https://pastelldev.ecollectivites.fr/api/delete-role-utilisateur.php?id_u=" .$detail->id_u ."&id_e=".$detail->id_e."&role=".$detail->role."";
+                                $url = str_replace(' ', '%20', $url);
+                               
+                                curl_setopt($ch, CURLOPT_URL, $url);
+                                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                                // curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+                                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                                curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+                                curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+                                curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+                                global $headers;
+                                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                                $result = curl_exec($ch);
+                                if (curl_errno($ch)) {
+                                        drupal_set_message('Error:' . curl_error($ch));
+                                }
+                                curl_close($ch);     
+                }
+        }
+
+}
+
+function ldapconnector_form_user_register_form_alter(&$form, FormStateInterface $form_state, $form_id)
+{
+        $current_user_id = \Drupal::currentUser()->id();
+        $current_user = \Drupal\user\Entity\User::load($current_user_id);
+        $current_user_grp_applis = $current_user->get('field_groupes_applicatifs')->getValue();
+
+        foreach ($current_user_grp_applis as $group) {
+                if ($group['target_id'] == '154') {
+                        if ($current_user_id && $current_user_id != 1) {
+                                $user = User::load($current_user_id);
+                                if ($user->hasField('field_collectivite')) {
+                                        $field_collectivite_value = $user->get('field_collectivite')->referencedEntities()[0]->get('field_identifier')->getValue()[0]['value'];
+                                        if ($field_collectivite_value !== null) {
+                                                $form['field_collectivite']['widget']["#default_value"] = $user->get('field_collectivite')->getValue()[0]["target_id"];
+                                                $group_name = $field_collectivite_value;
+                                        }
+                                }
+                        }
+                }
+        }
+        $request = \Drupal::request();
+        $query = $request->query;
+        if ($query->has('name') && !$group_name) {
+
+                $form['account']['name']['#default_value'] = 'prenom.nom@' . $query->get('name');
+        } else {
+                $form['account']['name']['#default_value'] = 'prenom.nom@' . $group_name;
+        }
+        if ($query->has('field_collectivite')) {
+                $selected_option_value = $query->get('field_collectivite');
+                foreach ($form['field_collectivite']['widget']['#options'] as $key => $value) {
+                        if ($key == $selected_option_value) {
+                                $form['field_collectivite']['widget']['#default_value'] = [$key];
+                                break;
+                        }
+                }
+        }
+}
+
+function ecv_ldap_applicatif_create($identifier, $group_name)
+{
+        $messenger = \Drupal::messenger();
+        $ldapconn = ldap_connect(SERVER, PORT)
+                or die("Impossible de se connecter au serveur LDAP.");
+        ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+        if ($ldapconn) {
+                $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+                if ($ldapbind) {
+
+                        $username = 'romain.leclerc@ecollectivitesvendee';
+
+                        $dn = 'cn=' . $group_name . ',' . OU_FOR_APPS . ',' . BASE_DN;
+                        $ldaptree = OU_FOR_APPS . ',' . BASE_DN;
+                        $result = ldap_search($ldapconn, $ldaptree, "(cn=" . $group_name . ")") or die("Error in search query: " . ldap_error($ldapconn));
+
+                        if ($result) {
+                                $data = ldap_get_entries($ldapconn, $result);
+                                if ($data) {
+                                        $nbresultats = $data["count"];
+                                }
+                        }
+
+                        if ($nbresultats == 0) {
+
+                                $attributes = [
+                                        'objectClass' => ['groupOfNames'],
+                                        'cn' => $identifier,
+                                        'description' => $group_name,
+                                        'member' => ['uid=' . $username . ',' . OU_FOR_PEOPLE . ',' . BASE_DN],
+                                ];
+
+                                $add = ldap_add($ldapconn, $dn, $attributes);
+
+                                if ($add) {
+                                        $confirm = 'Le groupe avec le nom ' . $group_name . ' et identifier ' . $identifier . ' a bien été créé dans LDAP.';
+                                        $messenger->addMessage($confirm);
+                                } else {
+                                        $errorMessage = 'Erreur lors de l\'ajout LDAP : ' . ldap_error($ldapconn);
+                                        $messenger->addError($errorMessage);
+                                }
+                        } else {
+                                $confirm = 'Il existe déjà ' . $nbresultats . ' résultat pour ce groupe/identifier, on ne peut le créer. Voici les détails LDAP du groupe existant :' . print_r($data);
+                                $messenger->addMessage($confirm);
+                        }
+                } else {
+                        $messenger->addError('Connexion LDAP échouée...');
+                }
+        }
+        ldap_close($ldapconn);
+}
+
+
+function ecv_ldap_collectivite_create($description, $identifier, $dpt, $group_name)
+{
+        $messenger = \Drupal::messenger();
+        $ldapconn = ldap_connect(SERVER, PORT)
+                or die("Impossible de se connecter au serveur LDAP.");
+        ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+        if ($ldapconn) {
+
+
+                $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+
+
+                if ($ldapbind) {
+
+                        $username = 'romain.leclerc@ecollectivitesvendee';
+
+                        $dn = 'cn=' . $group_name . ',' . OU_FOR_GROUP . ',' . BASE_DN;
+
+                        $ldaptree = OU_FOR_GROUP . ',' . BASE_DN;
+                        $result = ldap_search($ldapconn, $ldaptree, "(cn=" . $group_name . ")") or die("Error in search query: " . ldap_error($ldapconn));
+
+                        $data = ldap_get_entries($ldapconn, $result);
+
+                        $nbresultats = $data["count"];
+
+                        if ($nbresultats == 0) {
+                                $attributes = [
+                                        'objectClass' => ['groupOfNames'],
+                                        'cn' => $group_name,
+                                        'description' => $description,
+                                        'member' => 'uid=' . $username . ',ou=People,' . BASE_DN,
+                                        'businessCategory' => $dpt,
+                                ];
+
+                                $add = ldap_add($ldapconn, $dn, $attributes);
+
+                                if ($add) {
+                                        $confirm = 'La collectivité avec le nom ' . $group_name . ' et identifier ' . $group_name . ' a bien été créé dans LDAP.';
+                                        $messenger->addMessage($confirm);
+                                } else {
+                                        $errorMessage = 'Erreur lors de l\'ajout LDAP : ' . ldap_error($ldapconn);
+                                        $messenger->addError($errorMessage);
+                                }
+                        } else {
+                                $confirm = 'Il existe déjà ' . $nbresultats . ' résultat pour ce groupe/identifier, on ne peut le créer. Voici les détails LDAP du groupe existant :' . print_r($data);
+                                $messenger->addMessage($confirm);
+                        }
+                } else {
+                        $messenger->addError('Connexion LDAP échouée...');
+                }
+        }
+
+        ldap_close($ldapconn);
+}
+
+function ecv_ldap_collectivite_del($description, $identifier, $group_name)
+{
+        $messenger = \Drupal::messenger();
+        $ldapconn = ldap_connect(SERVER, PORT)
+                or die("Impossible de se connecter au serveur LDAP.");
+        ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+        if ($ldapconn) {
+                $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+
+                if ($ldapbind) {
+
+                        $dn = 'cn=' . $group_name . ',' . OU_FOR_GROUP . ',' . BASE_DN;
+
+                        $ldaptree = OU_FOR_GROUP . ',' . BASE_DN;
+                        $result = ldap_search($ldapconn, $ldaptree, "(cn=" . $group_name . ")") or die("Error in search query: " . ldap_error($ldapconn));
+
+                        $data = ldap_get_entries($ldapconn, $result);
+                        if ($data) {
+                                $nbresultats = $data["count"];
+                        }
+                        if ($nbresultats == 0) {
+
+                                $confirm = 'Il n y a aucun résultat pour cette collectivité, on ne peut la supprimer du LDAP !';
+                                $messenger->addMessage($confirm);
+                        } else {
+
+                                $del = ldap_delete($ldapconn, $dn);
+                                if ($del) {
+                                        $confirm = 'La collectivité avec le nom ' . $description . ' et identifier ' . $identifier . ' a bien été supprimé dans LDAP.';
+                                        $messenger->addMessage($confirm);
+                                } else {
+                                        $errorMessage = 'Erreur lors de la suppression LDAP : ' . ldap_error($ldapconn);
+                                        $messenger->addError($errorMessage);
+                                }
+                        }
+                } else {
+                        addMessage('Connexion LDAP échouée...', 'error');
+                }
+        }
+
+        ldap_close($ldapconn);
+}
+
+function ldapconnector_taxonomy_term_insert($term)
+{
+
+        $field_identifier = '';
+        if ($term->hasField('field_identifier')) {
+                $field_identifier_values = $term->get('field_identifier')->getValue();
+                if (!empty($field_identifier_values)) {
+                        $field_identifier = $field_identifier_values[0]['value'];
+                        $group_name = $field_identifier;
+                }
+        }
+
+        // Récupérez le nom du terme.
+        $term_name = $term->getName();
+
+        // Récupérez la valeur du champ "field_departement" s'il existe.
+        $field_departement = '';
+        if ($term->hasField('field_departement')) {
+                $field_departement_values = $term->get('field_departement')->getValue();
+                if (!empty($field_departement_values)) {
+                        $field_departement = $field_departement_values[0]['value'];
+                }
+        }
+        if ($term->hasField('field_departement')) {
+                ecv_ldap_collectivite_create($term_name, $field_identifier_values, $field_departement, $group_name);
+        } else {
+                ecv_ldap_applicatif_create($field_identifier, $group_name);
+        }
+}
+// // Focntionne également avec les groupe applicatifs 
+function ldapconnector_taxonomy_term_delete($term)
+{
+
+        // $description = $term->getName();
+
+        // // Récupérez la valeur de $identifier à partir du champ "field_identifier" s'il existe.
+        // $identifier = '';
+        // if ($term->hasField('field_identifier')) {
+        //         $field_identifier_values = $term->get('field_identifier')->getValue();
+        //         if (!empty($field_identifier_values)) {
+        //                 $identifier = $field_identifier_values[0]['value'];
+        //         }
+        // }
+
+        // // Utilisez la valeur de $identifier pour définir $group_name.
+        // $group_name = $identifier;
+
+        // ecv_ldap_collectivite_del($description, $identifier, $group_name);
+}
+
+function ldapconnector_user_insert($account)
+{
+        $current_user_id = \Drupal::currentUser()->id();
+        $current_user = \Drupal\user\Entity\User::load($current_user_id);
+        $current_user_grp_applis = $current_user->get('field_groupes_applicatifs')->getValue();
+
+
+        foreach ($current_user_grp_applis as $group) {
+                if ($group['target_id'] == '154') {
+                        if ($current_user_id) {
+                                // Charger l'entité utilisateur.
+                                $user = User::load($current_user_id);
+
+                                // Vous pouvez également vérifier si le champ existe avant d'accéder à sa valeur.
+                                if ($user->hasField('field_collectivite')) {
+                                        $field_collectivite_value = $user->get('field_collectivite')->referencedEntities()[0]->get('field_identifier')->getValue()[0]['value'];
+                                        if ($field_collectivite_value !== null) {
+                                                $group_name = $field_collectivite_value;
+                                        }
+                                }
+                        }
+                }
+        }
+        if ($account->hasField('field_collectivite') && !$account->get('field_collectivite')->isEmpty()) {
+                $group_name = $account->get('field_collectivite')->referencedEntities()[0]->get('field_identifier')->getValue()[0]['value'];
+        } else {
+                // Gérer le cas où ni field_identifier_cache ni field_tags ne sont définis.
+                $group_name = '';
+        }
+
+        if ($account->hasField('field_groupes_applicatifs') && !$account->get('field_groupes_applicatifs')->isEmpty()) {
+                foreach ($account->get('field_groupes_applicatifs') as $item) {
+                        $term_id_current_groupes_applicatifs = $item->target_id;
+                        $term_current_groupes_applicatifs = \Drupal\taxonomy\Entity\Term::load($term_id_current_groupes_applicatifs);
+                        $field_identifier_value = $term_current_groupes_applicatifs->get('field_identifier')->getValue()[0]['value'];
+                        $groupes_applicatifs[] = $field_identifier_value;
+                } // Traitez les valeurs du champ field_groupes_applicatifs comme vous le souhaitez.
+        } else {
+                // Gérer le cas où le champ field_groupes_applicatifs n'est pas défini.
+                $groupes_applicatifs = [];
+        }
+
+        if ($group_name != '') {
+
+                ecv_ldap_user_add($account);
+                ecv_ldap_group_add($account, $group_name, $groupes_applicatifs);
+
+                if (in_array('pastell', $groupes_applicatifs)) {
+                        $id_u = add_user_to_pastell($account);
+                        add_roles_to_pastell_user($account, $id_u);
+                }
+                
+        }
+
+}
+function ecv_ldap_group_add($account, $group_name, $groupes_applicatifs)
+{
+
+        $messenger = \Drupal::messenger();
+        $ldapconn = ldap_connect(SERVER, PORT) or die("Impossible de se connecter au serveur LDAP.");
+        ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+
+        if ($ldapconn) {
+
+                $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+
+
+                if ($ldapbind) {
+                        $username = $account->name->value;
+
+                        // Génération du DN pour le groupe principal
+                        $group_dn = 'cn=' . $group_name . ',' . OU_FOR_GROUP . ',' . BASE_DN;
+                        // Génération du DN pour le groupe applicatif
+
+                        // Préparation des données
+                        $filter = "(member=uid=" . $username . "," . OU_FOR_PEOPLE . "," . BASE_DN . ")";
+                        $attr = array('member');
+
+                        // Vérification pour le groupe principal
+                        $result = ldap_search($ldapconn, $group_dn, $filter, $attr);
+                        if ($result) {
+                                $data = ldap_get_entries($ldapconn, $result);
+                        }
+                        if ($data) {
+                                $nbresultats = $data["count"];
+                        }
+                        if ($nbresultats == 0) {
+                                // Utilisateur non encore membre du groupe principal, ajoutons-le.
+                                $members[] = 'uid=' . $username . ',' . OU_FOR_PEOPLE . "," . BASE_DN;
+                                $addgroup_ad['member'] = $members;
+                                $add = ldap_mod_add($ldapconn, $group_dn, $addgroup_ad);
+                                if ($add) {
+                                        $confirm = 'L\'utilisateur ' . $username . ' a bien été synchronisé dans LDAP comme membre du groupe : ' . $group_name;
+                                        $messenger->addMessage($confirm);
+                                } else {
+                                        $confirm = 'Erreur lors de l\'ajout de ' . $username . ' comme membre du groupe : ' . $group_name;
+                                        $messenger->addMessage($confirm,);
+                                }
+                        } else {
+                                $confirm = '<p>L\'utilisateur dispose déjà des droits et des entrées dans LDAP comme membre du groupe : ' . $group_name . '</p>';
+                                $messenger->addMessage($confirm);
+                        }
+
+                        foreach ($groupes_applicatifs as $applis) {
+
+                                $applicatif_dn = 'cn=' . $applis . ',' . OU_FOR_GROUP . ',' . BASE_DN;
+
+                                // Vérification pour le groupe applicatif
+                                $result = ldap_search($ldapconn, $applicatif_dn, $filter, $attr);
+                                if ($result) {
+                                        $data = ldap_get_entries($ldapconn, $result);
+                                }
+                                if ($data) {
+                                        $nbresultats = $data["count"];
+                                }
+                                if ($nbresultats == 0) {
+                                        // Utilisateur non encore membre du groupe applicatif, ajoutons-le.
+                                        $members_applicatif[] = 'uid=' . $username . ',' . OU_FOR_PEOPLE . "," . BASE_DN;
+                                        $addgroup_applicatif_ad['member'] = $members_applicatif;
+                                        $add = ldap_mod_add($ldapconn, $applicatif_dn, $addgroup_applicatif_ad);
+                                        if ($add) {
+                                                $confirm_applicatif = 'L\'utilisateur ' . $username . ' a bien été synchronisé dans LDAP comme membre du groupe applicatif : ' . $applis;
+                                                $messenger->addMessage($confirm_applicatif);
+                                        } else {
+                                                $confirm = 'Erreur lors de l\'ajout de ' . $username . ' comme membre du groupe : ' . $group_name;
+                                                $messenger->addMessage($confirm,);
+                                        }
+                                } else {
+                                        $confirm_applicatif = '<p>L\'utilisateur dispose déjà des droits et des entrées dans LDAP comme membre du groupe applicatif : ' . $applis . '</p>';
+                                        $messenger->addMessage($confirm_applicatif);
+                                }
+                        }
+                } else {
+                        $messenger->addMessage('Connexion LDAP échouée...');
+                }
+        }
+
+
+        ldap_close($ldapconn);
+}
+function ecv_ldap_user_add($account)
+{
+        // $password = $account->getPassword();
+        $messenger = \Drupal::messenger();
+        $ldapconn = ldap_connect(SERVER, PORT)
+                or die("Impossible de se connecter au serveur LDAP.");
+        ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+        if ($ldapconn) {
+
+                $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+
+                if ($ldapbind) {
+                        $username = $account->name->value;
+                        $dn = OU_FOR_PEOPLE . ',' . BASE_DN;
+
+                        $filter = "(uid=" . $username . ")";
+
+                        $result = ldap_search($ldapconn, $dn, $filter);
+                        $data = ldap_get_entries($ldapconn, $result);
+
+                        $nbresultats = $data["count"];
+
+                        if ($nbresultats == 0) {
+
+                                $attributes = [
+                                        'uid' => $username,
+                                        'cn' => $account->get('field_nom')->getValue()[0]['value'] . " " . $account->get('field_prenom')->getValue()[0]['value'],
+                                        'sn' => $account->get('field_nom')->getValue()[0]['value'],
+                                        'givenName' => $account->get('field_prenom')->getValue()[0]['value'],
+                                        'mail' => $account->getEmail(),
+                                        // 'userPassword' => '{SSHA}' .($password),
+                                        'objectClass' => ['inetOrgPerson', 'organizationalPerson', 'person'],
+                                ];
+
+                                $add = ldap_add($ldapconn, 'uid=' . $username . ',' . $dn, $attributes);
+                                if ($add) {
+                                        $confirm = 'L\'utilisateur à bien été créé dans l\'annuaire LDAP sous le nom ' . $username;
+                                        $messenger->addMessage($confirm);
+                                } else {
+                                        $confirm = 'L\'utilisateur ' . $username . ' n\'a pas pu être créé dans l\'annuaire';
+                                        $messenger->addMessage($confirm);
+                                }
+                        }
+                }
+        }
+        ldap_close($ldapconn);
+}
+
+function ecv_ldap_user_delete($username)
+{
+        $messenger = \Drupal::messenger();
+        $ldapconn = ldap_connect(SERVER, PORT) or die("Impossible de se connecter au serveur LDAP.");
+        ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+
+        if ($ldapconn) {
+
+                $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+
+
+                if ($ldapbind) {
+                        $dn = OU_FOR_PEOPLE . ',' . BASE_DN;
+
+                        $filter = "(uid=" . $username . ")";
+
+                        $result = ldap_search($ldapconn, $dn, $filter);
+                        $data = ldap_get_entries($ldapconn, $result);
+
+                        $nbresultats = $data["count"];
+
+                        if ($nbresultats > 0) {
+                                $user_dn = $data[0]['dn'];
+                                $delete = ldap_delete($ldapconn, $user_dn);
+
+                                if ($delete) {
+                                        $confirm = "L'utilisateur $username a été supprimé de l'annuaire LDAP.";
+                                        $messenger->addMessage($confirm);
+                                        return true;
+                                } else {
+                                        $messenger->addMessage("Erreur lors de la suppression de l'utilisateur dans LDAP : " . ldap_error($ldapconn), 'error');
+                                }
+                        } else {
+                                $messenger->addMessage("L'utilisateur $username n'existe pas dans l'annuaire LDAP.", 'error');
+                        }
+                }
+        }
+        ldap_close($ldapconn);
+}
+
+function ldapconnector_user_delete($account)
+{
+        // remove_role_pastell($account);
+        // $username = $account->name->value;
+        // ecv_ldap_user_remove_from_groups($account);
+        // ecv_ldap_user_delete($username);
+       
+}
+
+function ldapconnector_user_update($account)
+{
+        $messenger = \Drupal::messenger();
+        remove_role_pastell($account);
+        $results = get_id_u_pastell();
+        $id_u = 0;
+        $username = $account->name->value;
+        foreach($results as $resultat){
+                
+                if($username == $resultat->login){
+                        $messenger->addMessage("Récupération de l'utilisateur sur Pastell : " . $resultat->login);
+                        $id_u = $resultat->id_u;
+                        break;
+                }
+        }
+        add_roles_to_pastell_user($account, $id_u);
+        ecv_ldap_user_update($account);
+        ecv_ldap_user_group_update($account);
+}
+
+function ecv_ldap_user_update($account)
+{
+        if ($account->id() !== 1) {
+                $current_path = \Drupal::service('path.current')->getPath();
+
+                if (strpos($current_path, "user") !== false && strpos($current_path, "edit") !== false) {
+                        sleep(2);
+                        $messenger = \Drupal::messenger();
+                        $ldapconn = ldap_connect(SERVER, PORT) or die("Impossible de se connecter au serveur LDAP.");
+                        ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+
+                        if ($ldapconn) {
+
+                                $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+
+
+                                if ($ldapbind) {
+                                        $username = $account->original->name->value;
+                                        $user_dn = 'uid=' . $username . ',' . OU_FOR_PEOPLE . ',' . BASE_DN;
+                                        // Obtenez les valeurs actuelles des champs collectivite, groupes_applicatifs, mail et username
+                                        $current_mail = $account->getEmail();
+                                        $current_username = $account->name->value;
+
+                                        $old_mail = $account->original->getEmail();
+                                        $old_username = $account->original->name->value;
+                                        // Vérifiez s'il y a des modifications
+                                        $modifications = [];
+
+                                        // Mise à jour du champ "mail" dans l'annuaire LDAP
+                                        $old_mail = $account->original->getEmail(); // Valeur originale du champ "mail"
+                                        if ($current_mail !== $old_mail) {
+                                                $modifications['mail'] = $current_mail;
+                                        }
+
+                                        // Mise à jour du champ "cn" (Common Name) dans l'annuaire LDAP
+                                        if ($account->hasField('field_nom') && $account->hasField('field_prenom')) {
+                                                $field_nom = $account->get('field_nom')->getValue()[0]['value'];
+                                                $field_prenom = $account->get('field_prenom')->getValue()[0]['value'];
+                                                $cn = $field_nom . ' ' . $field_prenom;
+                                                $old_cn = $account->original->get('field_nom')->getValue()[0]['value'] . ' ' . $account->original->get('field_prenom')->getValue()[0]['value'];
+                                                if ($cn !== $old_cn) {
+                                                        $modifications['cn'] = $cn;
+                                                }
+                                        }
+
+                                        // Mise à jour du champ "username" dans l'annuaire LDAP
+                                        $old_username = $account->original->name->value; // Valeur originale du champ "username"
+                                        if ($current_username !== $old_username) {
+                                                $modifications['uid'] = $current_username;
+                                        }
+
+                                        // Mise à jour du champ "sn" (Nom de famille) dans l'annuaire LDAP
+                                        if ($account->hasField('field_nom')) {
+                                                $field_nom = $account->get('field_nom')->getValue()[0]['value'];
+                                                $old_field_nom = $account->original->get('field_nom')->getValue()[0]['value']; // Valeur originale du champ "field_nom"
+                                                if ($field_nom !== $old_field_nom) {
+                                                        $modifications['sn'] = $field_nom;
+                                                }
+                                        }
+
+                                        // Mise à jour du champ "givenName" (Prénom) dans l'annuaire LDAP
+                                        if ($account->hasField('field_prenom')) {
+                                                $field_prenom = $account->get('field_prenom')->getValue()[0]['value'];
+                                                $old_field_prenom = $account->original->get('field_prenom')->getValue()[0]['value']; // Valeur originale du champ "field_prenom"
+                                                if ($field_prenom !== $old_field_prenom) {
+                                                        $modifications['givenName'] = $field_prenom;
+                                                }
+                                        }
+
+                                        // Appliquez les modifications dans LDAP
+                                        if (!empty($modifications)) {
+                                                $updateDN = ldap_rename($ldapconn, $user_dn, "uid=" . $current_username, OU_FOR_PEOPLE . ',' . BASE_DN, false);
+                                                $newDN = 'uid=' . $current_username . ',' . OU_FOR_PEOPLE . ',' . BASE_DN;
+                                                if ($updateDN) {
+                                                        $update = ldap_modify($ldapconn, $newDN, $modifications);
+                                                }
+                                                if ($update) {
+                                                        $modified_fields = implode(', ', array_keys($modifications));
+                                                        $confirm = "Les informations de l'utilisateur $username ont été mises à jour dans l'annuaire LDAP. Les champs mis à jour sont : $modified_fields";
+                                                        $messenger->addMessage($confirm);
+                                                } else {
+                                                        $messenger->addMessage("Erreur lors de la mise à jour des informations de l'utilisateur dans LDAP : " . ldap_error($ldapconn), 'error');
+                                                }
+                                        }
+                                }
+                        }
+
+                        ldap_close($ldapconn);
+                }
+        }
+}
+
+
+
+
+function ecv_ldap_user_remove_from_groups($account)
+{
+        $messenger = \Drupal::messenger();
+        $ldapconn = ldap_connect(SERVER, PORT) or die("Impossible de se connecter au serveur LDAP.");
+        ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+
+        if ($ldapconn) {
+
+                $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+
+
+                if ($ldapbind) {
+                        $username = $account->name->value;
+                        $user_dn = 'uid=' . $username . ',' . OU_FOR_PEOPLE . ',' . BASE_DN;
+
+                        $filter = "(member=" . $user_dn . ")";
+
+                        $group_search = ldap_search($ldapconn, OU_FOR_GROUP . ',' . BASE_DN, $filter);
+                        if ($group_search) {
+                                $group_entries = ldap_get_entries($ldapconn, $group_search);
+                                if ($group_entries) {
+                                        $firstEntry = true;
+
+                                        foreach ($group_entries as $group_entry) {
+                                                if ($firstEntry) {
+                                                        $firstEntry = false;
+                                                        continue; // Passe au prochain itératif sans exécuter le reste du code dans la boucle pour le premier élément.
+                                                }
+
+                                                $group_dn = $group_entry['dn'];
+                                                // Supprimer l'utilisateur de ce groupe.
+                                                $modification = [
+                                                        'member' => $user_dn,
+                                                ];
+                                                $delete = ldap_mod_del($ldapconn, $group_dn, $modification);
+
+                                                if ($delete) {
+                                                        $confirm = "L'utilisateur $username a été retiré du groupe $group_dn.";
+                                                        $messenger->addMessage($confirm);
+                                                } else {
+                                                        $messenger->addMessage("Erreur lors de la suppression de l'utilisateur du groupe $group_dn : " . ldap_error($ldapconn), 'error');
+                                                }
+                                        }
+                                }
+                        }
+                }
+        }
+
+        ldap_close($ldapconn);
+}
+
+function ecv_ldap_user_group_update($account)
+{
+        $current_path = \Drupal::service('path.current')->getPath();
+
+        if (strpos($current_path, "user") !== false && strpos($current_path, "edit") !== false) {
+
+                $messenger = \Drupal::messenger();
+                $ldapconn = ldap_connect(SERVER, PORT) or die("Impossible de se connecter au serveur LDAP.");
+                ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+
+                if ($ldapconn) {
+
+                        $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+
+
+                        if ($ldapbind) {
+
+                                // Pour l'utilisateur actuel - field_collectivite.
+                                $term_id_current_collectivite = $account->get('field_collectivite')->target_id;
+                                $term_current_collectivite = \Drupal\taxonomy\Entity\Term::load($term_id_current_collectivite);
+
+                                // Pour l'utilisateur original - field_collectivite.
+                                $term_id_old_collectivite = $account->original->get('field_collectivite')->target_id;
+                                $term_old_collectivite = \Drupal\taxonomy\Entity\Term::load($term_id_old_collectivite);
+
+                                if ($term_current_collectivite !== null) {
+                                        if ($account->hasField('field_collectivite')) {
+                                                $new_departement = $term_current_collectivite->get('field_identifier')->getValue()[0]['value'];
+                                        }
+                                } else {
+                                        $new_departement = '';
+                                }
+
+                                if ($account->hasField('field_groupes_applicatifs')) {
+                                        foreach ($account->get('field_groupes_applicatifs') as $item) {
+                                                $term_id_current_groupes_applicatifs = $item->target_id;
+                                                $term_current_groupes_applicatifs = \Drupal\taxonomy\Entity\Term::load($term_id_current_groupes_applicatifs);
+                                                $field_identifier_value = $term_current_groupes_applicatifs->get('field_identifier')->getValue()[0]['value'];
+                                                $groupes_applicatifs_values[] = $field_identifier_value;
+                                        }
+                                }
+                                if ($term_old_collectivite !== null) {
+                                        if ($account->original->hasField('field_collectivite')) {
+                                                $old_departement = $term_old_collectivite->get('field_identifier')->getValue()[0]['value'];
+                                        }
+                                } else {
+                                        $old_departement = '';
+                                }
+
+
+                                if ($account->original->hasField('field_groupes_applicatifs')) {
+                                        foreach ($account->original->get('field_groupes_applicatifs') as $item) {
+                                                $term_id_old_groupes_applicatifs = $item->target_id;
+                                                $term_old_groupes_applicatifs = \Drupal\taxonomy\Entity\Term::load($term_id_old_groupes_applicatifs);
+                                                if ($term_old_groupes_applicatifs) {
+                                                        $field_old_identifier_value = $term_old_groupes_applicatifs->get('field_identifier')->getValue()[0]['value'];
+                                                        $groupes_old_applicatifs_values[] = $field_old_identifier_value;
+                                                }
+                                        }
+                                }
+                                if (($old_departement && $new_departement == null) || ($new_departement == null && $old_departement == null)) {
+                                        $username = $account->name->value;
+                                        $confirm1 = "L'utilisateur $username a bien été retiré de la collectivité $old_departement";
+                                        $messenger->addMessage($confirm1);
+                                        $confirm = "L'utilisateur $username ne peut pas se retrouver sans collectivité";
+                                        $messenger->addMessage($confirm);
+                                }
+
+                                // Comparez les nouvelles valeurs avec les anciennes valeurs pour déterminer si une mise à jour est nécessaire.
+                                if ($old_departement == null && $new_departement !== null) {
+                                        $username = $account->name->value;
+                                        $user_dn = 'uid=' . $username . ',' . OU_FOR_PEOPLE . ',' . BASE_DN;
+                                        $filter = "(member=" . $user_dn . ")";
+                                        $modification = [
+                                                'member' => $user_dn,
+                                        ];
+
+                                        $group_search_new = ldap_search($ldapconn, 'cn=' . $new_departement . ',' . OU_FOR_GROUP . ',' . BASE_DN, $filter);
+                                        if ($group_search_new) {
+                                                $group_entries_new = ldap_get_entries($ldapconn, $group_search_new);
+                                        }
+                                        if ($group_entries_new) {
+                                                if ($group_entries_new['count'] == 0) {
+                                                        $add = ldap_mod_add($ldapconn, 'cn=' . $new_departement . ',' . OU_FOR_GROUP . ',' . BASE_DN, $modification);
+                                                }
+                                        }
+                                        if ($add) {
+                                                $confirm = "L'utilisateur $username a été ajouté à la collectivité  $new_departement";
+                                                $messenger->addMessage($confirm);
+                                        } else {
+                                                $messenger->addMessage("Erreur lors de la mise à jour du groupe de l'utilisateur : " . ldap_error($ldapconn), 'error');
+                                        }
+                                }
+
+                                if (($new_departement != $old_departement) && ($old_departement != null && $new_departement != null)) {
+
+                                        $username = $account->name->value;
+                                        $user_dn = 'uid=' . $username . ',' . OU_FOR_PEOPLE . ',' . BASE_DN;
+                                        $filter = "(member=" . $user_dn . ")";
+                                        $modification = [
+                                                'member' => $user_dn,
+                                        ];
+                                        $group_search = ldap_search($ldapconn, 'cn=' . $old_departement . ',' . OU_FOR_GROUP . ',' . BASE_DN, $filter);
+                                        if ($group_search) {
+                                                $group_entries = ldap_get_entries($ldapconn, $group_search);
+                                        }
+                                        if ($group_entries != null) {
+
+                                                $delete = ldap_mod_del($ldapconn, 'cn=' . $old_departement . ',' . OU_FOR_GROUP . ',' . BASE_DN, $modification);
+                                        }
+                                        $group_search_new = ldap_search($ldapconn, 'cn=' . $new_departement . ',' . OU_FOR_GROUP . ',' . BASE_DN, $filter);
+                                        if ($group_search_new) {
+                                                $group_entries_new = ldap_get_entries($ldapconn, $group_search_new);
+                                        }
+                                        if ($group_entries_new['count'] == 0) {
+                                                $add = ldap_mod_add($ldapconn, 'cn=' . $new_departement . ',' . OU_FOR_GROUP . ',' . BASE_DN, $modification);
+                                        }
+                                        if ($delete && $add) {
+                                                $confirm = "L'utilisateur $username a été changé de la collectivité $old_departement vers $new_departement";
+                                                $messenger->addMessage($confirm);
+                                        } else {
+                                                $messenger->addMessage("Erreur lors de la mise à jour du groupe de l'utilisateur : " . ldap_error($ldapconn), 'error');
+                                        }
+                                }
+                                // SI liste des apps différentes de celle avant la maj user
+                                if ($groupes_applicatifs_values != $groupes_old_applicatifs_values) {
+                                        $username = $account->name->value;
+                                        $user_dn = 'uid=' . $username . ',' . OU_FOR_PEOPLE . ',' . BASE_DN;
+                                        $filter = "(member=" . $user_dn . ")";
+                                        $modification = [
+                                                'member' => $user_dn,
+                                        ];
+                                        if ($groupes_applicatifs_values == null) {
+                                                $groupes_applicatifs_values = [];
+                                        }
+                                        if ($groupes_old_applicatifs_values == null) {
+                                                $groupes_old_applicatifs_values = [];
+                                        }
+
+                                        foreach ($groupes_old_applicatifs_values as $value) {
+                                                if (!in_array($value, $groupes_applicatifs_values)) {
+                                                        //dpm('cn=' . $value . ',' . OU_FOR_GROUP . ',' . BASE_DN);
+                                                        $group_search = ldap_search($ldapconn, 'cn=' . $value . ',' . OU_FOR_GROUP . ',' . BASE_DN, $filter);
+                                                        if ($group_search) {
+                                                                //dpm($group_search);
+                                                                $group_entries = ldap_get_entries($ldapconn, $group_search);
+                                                        }
+                                                        if ($group_entries) {
+                                                                $delete = ldap_mod_del($ldapconn, 'cn=' . $value . ',' . OU_FOR_GROUP . ',' . BASE_DN, $modification);
+                                                                if ($delete) {
+                                                                        $confirm = "L'utilisateur $username a été retiré du groupe $value ";
+                                                                        $messenger->addMessage($confirm);
+                                                                }
+                                                        }
+                                                }
+                                        }
+
+                                        foreach ($groupes_applicatifs_values as $values) {
+                                                if (!in_array($values, $groupes_old_applicatifs_values)) {
+                                                        //dpm('cn=' . $values . ',' . OU_FOR_GROUP . ',' . BASE_DN);
+                                                        $group_search_new = ldap_search($ldapconn, 'cn=' . $values . ',' . OU_FOR_GROUP . ',' . BASE_DN, $filter);
+                                                        //dpm($group_search_new);
+                                                        if ($group_search_new) {
+                                                                $group_entries_new = ldap_get_entries($ldapconn, $group_search_new);
+                                                        }
+                                                        if ($group_entries_new['count'] == 0) {
+                                                                $add = ldap_mod_add($ldapconn, 'cn=' . $values . ',' . OU_FOR_GROUP . ',' . BASE_DN, $modification);
+                                                                if ($add) {
+                                                                        $confirm = "L'utilisateur $username a été ajouté au groupe $values ";
+                                                                        $messenger->addMessage($confirm);
+                                                                }
+                                                        }
+                                                }
+                                        }
+                                }
+                        }
+                }
+        }
+}

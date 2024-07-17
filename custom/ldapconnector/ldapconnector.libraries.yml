@@ -1,0 +1,12 @@
+ldapconnector_add_coll:
+  version: 1.x
+  js:
+    js/add_collectivite.js: {}
+ldapconnector_add_user:
+  version: 1.x
+  js:
+    js/add_user.js: {}
+  css:
+    theme:
+      css/user.css: {}
+      css/edit_user.css: {}

@@ -1,0 +1,7 @@
+ldapimporter.admin:
+  path: '/admin/config/system/ldapimporter'
+  defaults:
+    _title: 'LDAP Importer Settings'
+    _form: '\Drupal\ldapimporter\Form\LDAPImporterSettingsForm'
+  requirements:
+    _permission: 'administer site configuration'

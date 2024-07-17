@@ -1,0 +1,9 @@
+name: 'LDAP Connector'
+type: module
+description: 'Provide LDAP connection functionality.'
+core_version_requirement: ^10
+package: Custom
+version: '1.0'
+project: 'ldapconnector'
+libraries:
+  - ldapconnector/ldapconnector_add_coll

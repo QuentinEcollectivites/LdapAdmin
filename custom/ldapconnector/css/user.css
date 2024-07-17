@@ -1,0 +1,54 @@
+.js-form-item-cas-username, .js-form-item-name, .js-form-item-notify {
+        pointer-events: none;
+}
+.js-form-item.form-item.js-form-type-select.form-type--select.js-form-item-field-api-data.form-item--field-api-data select,
+.js-form-item.form-item.js-form-type-select.form-type--select.js-form-item-field-groupes-applicatifs.form-item--field-groupes-applicatifs select {
+        height: 150px;;
+}        
+
+.fieldset--group .form-checkboxes .js-form-type-checkbox{
+        width: 18%;
+}
+div#edit-field-id-utilisateur-pastell-wrapper,  
+div#edit-field-entite-role-pastell-wrapper,
+.js-form-item.form-item.js-form-type-textfield.form-type--textfield.js-form-item-field-entite-role-pastell-0-value.form-item--field-entite-role-pastell-0-value {
+        visibility: hidden;
+        height: 0px;
+        margin: 0px!important
+    }
+
+.fieldset--group .form-checkboxes{
+        display: flex;
+        flex-wrap: wrap;  
+}
+.form-item__description, .fieldset__description, fieldset#edit-status--wrapper, div#edit-pass {
+        display: none;
+}
+div#edit-account{
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;  
+}
+div#edit-account>div, div#edit-field-nom-wrapper{
+        padding: 0 1em 0 0;
+        margin-top: 0;
+}
+form#user-form{
+        display: flex;
+    flex-wrap: wrap;
+}
+div#edit-field-nom-wrapper>div, div#edit-field-prenom-wrapper>div,
+div#edit-field-collectivite-wrapper>div, div#edit-field-groupes-applicatifs-wrapper>fieldset,
+div#user-details-wrapper>fieldset, fieldset#edit-user-details-0{
+        margin-top: 0;
+}        
+
+.fieldset__label{
+        padding: 0.4em 1.5rem!important; 
+}
+fieldset#edit-field-groupes-applicatifs--wrapper span{
+        padding-left: 0!important;
+}
+#user-details-wrapper{
+        width: 100%;
+}

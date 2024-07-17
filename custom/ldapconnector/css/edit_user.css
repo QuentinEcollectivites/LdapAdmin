@@ -1,0 +1,42 @@
+
+form#user-register-form, 
+#user-details-wrapper .form-checkboxes{
+display: flex;
+flex-wrap: wrap;
+}
+
+div#edit-field-nom-wrapper, div#edit-field-prenom-wrapper,
+div#edit-field-collectivite-wrapper, .form-type-email, .form-item-cas-username{
+  width: 50%;
+}
+.form-item-cas-enabled, .form-item-notify{
+  display: none;
+}
+#edit-field-groupes-applicatifs {
+  display: flex;
+  flex-wrap: wrap;
+}
+#edit-field-groupes-applicatifs .form-item{
+  width: 20%;
+}
+.description, .fieldset-legend{
+  display: none;
+}
+
+#user-details-wrapper .form-checkboxes .form-item{
+  width: 20%;
+}
+.admin_pleiade .js-form-item-roles-content-editor, 
+.admin_pleiade .js-form-item-roles-administrator
+{
+display: none;
+}
+div#edit-roles{
+  display: inline-flex;
+}
+.form-item-roles-authenticated{
+  padding: 0 0.6em 0 0;
+}
+.admin_groupe .field--name-field-collectivite{
+  pointer-events: none;
+}

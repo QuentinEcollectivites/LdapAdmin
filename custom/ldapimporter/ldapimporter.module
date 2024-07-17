@@ -1,0 +1,713 @@
+<?php
+
+$config = \Drupal::config('ldapconnector.settings');
+define('SERVER', $config->get('ldap_server'));
+define('PORT', $config->get('ldap_port'));
+define('BIND_DN', $config->get('ldap_bind_dn'));
+define('BASE_DN', $config->get('ldap_base_dn'));
+define('BIND_PASS', $config->get('ldap_bind_pass'));
+define('OU_FOR_GROUP', $config->get('ou_for_group'));
+define('OU_FOR_PEOPLE', $config->get('ou_for_people'));
+define('OU_FOR_APPS', $config->get('ou_for_apps'));
+
+
+use Drupal\user\Entity\User;
+use Drupal\taxonomy\Entity\Term;
+
+/**
+ * @param $variables
+ */
+
+// //FONCTION PASTELL 
+function get_id_user_pastell()
+{
+
+    $ch = curl_init();
+
+    $url = "https://pastelldev.ecollectivites.fr/api/list-utilisateur.php";
+
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+    curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+    curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+    global $headers;
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    $result = curl_exec($ch);
+    if (curl_errno($ch)) {
+        drupal_set_message('Error:' . curl_error($ch));
+    }
+    curl_close($ch);
+    $results = json_decode($result);
+    return $results;
+}
+
+function get_role_user($id_u)
+{
+
+    $ch = curl_init();
+
+    curl_setopt($ch, CURLOPT_URL, "pastelldev.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+    curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+    curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+    global $headers;
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    $result = curl_exec($ch);
+    if (curl_errno($ch)) {
+        drupal_set_message('Error:' . curl_error($ch));
+    }
+    curl_close($ch);
+    $result = json_decode($result);
+
+    return $result;
+}
+
+
+
+function test_get_user_from_ldap()
+{
+    $messenger = \Drupal::messenger();
+
+    // Configuration LDAP.
+    $ldap_server = SERVER;
+    $ldap_port = PORT;
+    $ldap_bind_dn = BIND_DN;
+    $ldap_bind_pass = BIND_PASS;
+    $ldap_search_base = BASE_DN;
+    $ldap_filter = '(objectClass=inetOrgPerson)'; // Filtre pour récupérer les utilisateurs.
+    $counter = 0;  // Initialize the counter
+    $ldapconn = ldap_connect($ldap_server, $ldap_port) or die("Impossible de se connecter au serveur LDAP.");
+    ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+
+    if ($ldapconn) {
+        // Connexion au serveur LDAP.
+        $ldapbind = ldap_bind($ldapconn, $ldap_bind_dn, $ldap_bind_pass);
+
+        // Vérification de l'authentification.
+        if ($ldapbind) {
+            $result = ldap_search($ldapconn, $ldap_search_base, $ldap_filter) or die("Error in search query: " . ldap_error($ldapconn));
+            $data = ldap_get_entries($ldapconn, $result);
+
+            $user_count = $data["count"];
+
+            if ($user_count > 0) {
+                foreach ($data as $user_entry) {
+                    if ($counter >= 20) {
+                        break;  // Exit the loop after processing 20 users
+                    }
+                    // Vérifiez si l'utilisateur LDAP a un champ 'uid'.
+                    if (isset($user_entry['uid'][0])) {
+                        $ldap_uid = $user_entry['uid'][0];
+
+                        // Vérifiez si un utilisateur Drupal avec le même 'uid' existe.
+                        $existing_user = user_load_by_name($ldap_uid);
+
+                        if (!$existing_user) {
+                            // Aucun utilisateur Drupal trouvé pour cet 'uid'.
+                            $message = 'L\'utilisateur LDAP avec uid "' . $ldap_uid . '" n\'existe pas dans Drupal.';
+                            $messenger->addMessage($message);
+                            $counter++;
+                        }
+                        // else {
+                        //     // Un utilisateur Drupal avec le même 'uid' existe.
+                        //     // Vous pouvez afficher un message différent ou effectuer d'autres actions si nécessaire.
+                        //     $message = 'L\'utilisateur LDAP avec uid "' . $ldap_uid . '" correspond à l\'utilisateur Drupal avec uid "' . $existing_user->getAccountName() . '".';
+                        //     $messenger->addMessage($message);
+                        // }
+                    }
+                }
+            } else {
+                $messenger->addMessage('Aucun utilisateur LDAP trouvé.');
+            }
+        } else {
+            $messenger->addError('Connexion LDAP échouée...');
+        }
+        // ON FERME LA CONNEXION LDAP.
+        ldap_close($ldapconn);
+    } else {
+        $messenger->addError('Impossible de se connecter au serveur LDAP.');
+    }
+}
+
+function test_get_groups_from_ldap()
+{
+    $messenger = \Drupal::messenger();
+
+    // Configuration LDAP.
+    $ldap_server = SERVER;
+    $ldap_port = PORT;
+    $ldap_bind_dn = BIND_DN;
+    $ldap_bind_pass = BIND_PASS;
+    $ldap_search_base = BASE_DN;
+    $ldap_filter = '(objectClass=groupOfNames)'; // Filtre pour récupérer les groupes.
+
+    $ldapconn = ldap_connect($ldap_server, $ldap_port) or die("Impossible de se connecter au serveur LDAP.");
+    ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+
+    if ($ldapconn) {
+        // Connexion au serveur LDAP.
+        $ldapbind = ldap_bind($ldapconn, $ldap_bind_dn, $ldap_bind_pass);
+
+        // Vérification de l'authentification.
+        if ($ldapbind) {
+            $result = ldap_search($ldapconn, $ldap_search_base, $ldap_filter) or die("Error in search query: " . ldap_error($ldapconn));
+            $data = ldap_get_entries($ldapconn, $result);
+
+            if ($data["count"] > 0) {
+                foreach ($data as $group_entry) {
+                    // Vous pouvez accéder aux informations du groupe LDAP ici.
+                    // Par exemple, afficher le nom du groupe.
+                    if (isset($group_entry['cn'][0])) {
+                        $ldap_group_name = $group_entry['cn'][0];
+
+                        // Vérifier si le terme existe dans la taxonomie "collectivite".
+                        // Vérifiez si le nom du groupe LDAP correspond à un terme de la taxonomie.
+                        $taxonomy_terms = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadMultiple();
+                        $group_exists = false;
+
+                        foreach ($taxonomy_terms as $term) {
+                            // Vérifiez le champ "identifier" du terme de la taxonomie.
+                            if ($term->hasField('field_identifier') && $term->get('field_identifier')->value == $ldap_group_name) {
+                                $group_exists = true;
+                                break;
+                            }
+                        }
+
+                        if ($group_exists) {
+                            $message = 'Le groupe LDAP "' . $ldap_group_name . '" existe déjà dans les taxonomies.';
+                            $messenger->addMessage($message);
+                        } else {
+                            $message = 'Le groupe LDAP "' . $ldap_group_name . '" n\'est pas dans les taxonomies.';
+                            $messenger->addMessage($message);
+                        }
+                    }
+                }
+            } else {
+                $messenger->addMessage('Aucun groupe LDAP trouvé.');
+            }
+        } else {
+            $messenger->addError('Connexion LDAP échouée...');
+        }
+        // ON FERME LA CONNEXION LDAP.
+        ldap_close($ldapconn);
+    } else {
+        $messenger->addError('Impossible de se connecter au serveur LDAP.');
+    }
+}
+
+function synchro_user_from_ldap()
+{
+    $messenger = \Drupal::messenger();
+
+    // Configuration LDAP.
+    $ldap_server = SERVER;
+    $ldap_port = PORT;
+    $ldap_bind_dn = BIND_DN;
+    $ldap_bind_pass = BIND_PASS;
+    $ldap_search_base = BASE_DN;
+    $ldap_filter = '(objectClass=inetOrgPerson)'; // Filtre pour récupérer les utilisateurs.
+    $counter = 0;  // Initialize the counter
+    $ldapconn = ldap_connect($ldap_server, $ldap_port) or die("Impossible de se connecter au serveur LDAP.");
+    ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+
+    if ($ldapconn) {
+        // Connexion au serveur LDAP.
+        $ldapbind = ldap_bind($ldapconn, $ldap_bind_dn, $ldap_bind_pass);
+
+        // Vérification de l'authentification.
+        if ($ldapbind) {
+            $result = ldap_search($ldapconn, $ldap_search_base, $ldap_filter) or die("Error in search query: " . ldap_error($ldapconn));
+            $data = ldap_get_entries($ldapconn, $result);
+
+            $user_count = $data["count"];
+
+            if ($user_count > 0) {
+                foreach ($data as $user_entry) {
+                    if ($counter >= 200) {
+                        break;  // Exit the loop after processing 20 users
+                    }
+                    // Vérifiez si l'utilisateur LDAP a un champ 'uid'. Pour ajouter un user particulier ---> && $user_entry['uid'][0] = "dev.test@formation"
+                    if (isset($user_entry['uid'][0]) && isset($user_entry['mail'][0]) && isset($user_entry['sn'][0])) {
+                        $ldap_uid = $user_entry['uid'][0];
+                        $existing_user = user_load_by_name($ldap_uid);
+
+                        if (!$existing_user) {
+                            $message = 'L\'utilisateur LDAP avec uid "' . $ldap_uid . '" n\'existe pas dans Drupal. Création de l\'utilisateur...';
+                            $messenger->addMessage($message);
+
+                            $results = get_id_user_pastell();
+                            $id_u = 0;
+                            foreach ($results as $resultat) {
+                                if ($ldap_uid == $resultat->login) {
+
+                                    $messenger->addMessage("Récupération de l'utilisateur sur Pastell : " . $resultat->login);
+                                    $new_user = User::create();
+                                    $new_user->setUsername($ldap_uid);
+                                    $new_user->setPassword(\Drupal::service('password_generator')->generate());
+                                    $new_user->enforceIsNew();
+                                    $new_user->activate();
+                                    $new_user->set("mail", $user_entry['mail'][0]);
+                                    $new_user->set("field_nom", $user_entry['sn'][0]); // Champ 'field_nom'.
+                                    $new_user->set("field_prenom", $user_entry['givenname'][0]); // Champ 'field_prenom'.
+                                    // $new_user->set("edit-cas-enabled", TRUE); // Champ 'field_prenom'.
+                                    // $new_user->set("edit-cas-username", $ldap_uid); // Champ 'field_prenom'.
+                                    // $created_user = user_load_by_name($ldap_uid);
+                                    // $casUserManager = \Drupal::service('cas.user_manager');
+                                    // $casUserManager->setCasUsernameForAccount($created_user, $ldap_uid);
+                                    $message = 'L\'utilisateur Drupal avec uid "' . $ldap_uid . '" a été créé.';
+                                    $messenger->addMessage($message);
+                                    $messenger->addMessage('Ajout des infos Pastell...');
+                                    $id_u = $resultat->id_u;
+                                    $roles = get_role_user($id_u);
+                                    $messenger->addMessage("blabla : " . json_encode($roles));
+                                    foreach ($roles as $role) {
+                                        if (!($role->role == 'aucun droit')) {
+                                            $entry = [
+                                                "field_entite" => $role->id_e,
+                                                "field_role" => [
+                                                    $role->role => $role->role
+                                                ]
+                                            ];
+                                            $roleUser[] = $entry;
+                                        }
+                                    }
+                                    $messenger->addMessage("rôles sur Pastell : " . json_encode($roleUser));
+                                    $new_user->set("field_id_utilisateur_pastell", $id_u);
+                                    $new_user->set("field_entite_role_pastell", json_encode($roleUser));
+                                    $new_user->save();
+                                    sleep(2);
+                                    break;
+                                }
+                            }
+
+
+
+
+                            $counter++;
+                        } else {
+                            // Un utilisateur Drupal avec le même 'uid' existe.
+                            // Vous pouvez afficher un message différent ou effectuer d'autres actions si nécessaire.
+                            // $message = 'L\'utilisateur LDAP avec uid "' . $ldap_uid . '" correspond à l\'utilisateur Drupal avec uid "' . $existing_user->getAccountName() . '".';
+                            // $messenger->addMessage($message);   [{"field_entite":"13","field_role":{"agent actes":"agent actes"}},{"field_entite":"17","field_role":{"agent actes":"agent actes"}}]
+                        }
+                    }
+                }
+            } else {
+                $messenger->addMessage('Aucun utilisateur LDAP trouvé.');
+            }
+        } else {
+            $messenger->addError('Connexion LDAP échouée...');
+        }
+        // ON FERME LA CONNEXION LDAP.
+        ldap_close($ldapconn);
+    } else {
+        $messenger->addError('Impossible de se connecter au serveur LDAP.');
+    }
+}
+
+function synchro_groups_from_ldap()
+{
+    $messenger = \Drupal::messenger();
+
+    // Configuration LDAP.
+    $ldap_server = SERVER;
+    $ldap_port = PORT;
+    $ldap_bind_dn = BIND_DN;
+    $ldap_bind_pass = BIND_PASS;
+    $ldap_search_base = BASE_DN;
+    $ldap_filter = '(objectClass=groupOfNames)'; // Filtre pour récupérer les groupes.
+
+    $ldapconn = ldap_connect($ldap_server, $ldap_port) or die("Impossible de se connecter au serveur LDAP.");
+    ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+
+    if ($ldapconn) {
+        // Connexion au serveur LDAP.
+        $ldapbind = ldap_bind($ldapconn, $ldap_bind_dn, $ldap_bind_pass);
+
+        // Vérification de l'authentification.
+        if ($ldapbind) {
+            $result = ldap_search($ldapconn, $ldap_search_base, $ldap_filter) or die("Error in search query: " . ldap_error($ldapconn));
+            $data = ldap_get_entries($ldapconn, $result);
+
+            if ($data["count"] > 0) {
+                foreach ($data as $group_entry) {
+
+                    if (isset($group_entry['cn'][0])) {
+                        $ldap_group_name = $group_entry['cn'][0];
+                        $term_vocabulary = isset($group_entry['businesscategory'][0]) ? 'collectivite' : 'groupe_applicatif';
+
+                        // Vérifiez que les champs requis ne sont pas vides.
+                        if (isset($group_entry['description'][0]) && !empty($ldap_group_name)) {
+                            $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+                            $term_exists = $term_storage->loadByProperties(['field_identifier' => $ldap_group_name, 'vid' => $term_vocabulary]);
+
+                            if (!$term_exists) {
+
+                                $term_fields = [
+                                    'vid' => $term_vocabulary,
+                                    'name' => strtoupper($group_entry['description'][0]),
+                                    'field_identifier' => preg_replace('/[^A-Za-z0-9_\-]/', '', $ldap_group_name),
+                                ];
+
+                                if (isset($group_entry['businesscategory'][0])) {
+                                    $term_fields['field_departement'] = $group_entry['businesscategory'][0];
+                                }
+
+                                // //dpm($term_fields);
+                                // // // Création du terme de taxonomie.
+                                $term = Term::create($term_fields);
+                                $term->save();
+                                $message = 'Le groupe LDAP "' . $ldap_group_name . '" a été créé comme terme de taxonomie de type "' . $term_vocabulary . '".';
+                                $messenger->addMessage($message);
+
+                                if (isset($group_entry['member'])) {
+                                    $ldap_members = $group_entry['member'];
+                                    // dpm($ldap_members);
+                                    // Parcourez les membres et extrayez seulement l'UID.
+                                    $uids = [];
+                                    foreach ($ldap_members as $member) {
+                                        $matches = [];
+                                        if (preg_match('/uid=([^,]+)/', $member, $matches)) {
+                                            $uid = $matches[1];
+                                            $uids[] = $uid; // nom d'utilisateur
+                                        }
+                                    }
+                                    // Vous avez maintenant les UID des membres.
+                                    // Parcourez chaque UID et vérifiez s'il existe dans les utilisateurs Drupal.
+
+                                    foreach ($uids as $uid) {
+                                        $existing_user = user_load_by_name($uid);
+                                        // si l'utilisateur existe a partir de son nom d'utilisateur
+                                        if ($existing_user) {
+                                            // si le champ de l'utilisateur field_collectivité est vide
+
+
+                                            if ($existing_user->get('field_collectivite')[0] == null) {
+
+                                                // si le champ département existe
+                                                if (isset($group_entry['businesscategory'][0])) {
+
+                                                    if ($group_entry['businesscategory'][0] !== null) {
+                                                        $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+                                                        $term_exists = $term_storage->loadByProperties(['field_identifier' => $group_entry['cn'][0]]);
+
+                                                        // Mettez à jour le champ field_collectivite avec la valeur de businessCategory.
+                                                        $existing_user->set('field_collectivite', $term_exists);
+                                                        $existing_user->save();
+                                                        $message = 'Le Champ field_collectivite de ' . $uid . ' a été mis à jour.';
+                                                        $messenger->addMessage($message);
+                                                    }
+                                                }
+                                            }
+
+                                            if (!isset($group_entry['businesscategory'][0])) {
+
+                                                $array_current_field_applicatifs = array();
+
+                                                //TODO : faire un get puis ajouter dans l'array le term récupéré
+                                                foreach ($existing_user->get('field_groupes_applicatifs') as $value) {
+                                                    $current_id = ($value->getValue()['target_id']);
+                                                    array_push($array_current_field_applicatifs, $current_id);
+                                                }
+
+                                                $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+                                                $terms = $term_storage->loadByProperties(['field_identifier' => $group_entry['cn'][0]]);
+                                                $id_term = array_keys($terms)[0];
+                                                array_push($array_current_field_applicatifs, $id_term);
+
+                                                $existing_user->set('field_groupes_applicatifs', array_values($array_current_field_applicatifs));
+                                                $existing_user->save();
+                                                $message = 'Le Champ field_groupe_applicatif de ' . $uid . ' a été mis à jour.';
+                                                $messenger->addMessage($message);
+                                            }
+                                        } else {
+                                            $message = 'L\'utilisateur LDAP avec UID "' . $uid . '" n\'existe pas dans Drupal.';
+                                            $messenger->addMessage($message);
+                                        }
+                                    }
+                                }
+                            } else {
+                                $message = 'Le groupe LDAP "' . $ldap_group_name . '" existe déjà dans le taxonomie "' . $term_vocabulary . '".';
+                                $messenger->addMessage($message);
+                                if (isset($group_entry['member'])) {
+                                    $ldap_members = $group_entry['member'];
+                                    // dpm($ldap_members);
+                                    // Parcourez les membres et extrayez seulement l'UID.
+                                    $uids = [];
+                                    foreach ($ldap_members as $member) {
+                                        $matches = [];
+                                        if (preg_match('/uid=([^,]+)/', $member, $matches)) {
+                                            $uid = $matches[1];
+                                            $uids[] = $uid; // nom d'utilisateur
+                                        }
+                                    }
+                                    // Vous avez maintenant les UID des membres.
+                                    // Parcourez chaque UID et vérifiez s'il existe dans les utilisateurs Drupal.
+
+                                    foreach ($uids as $uid) {
+                                        $existing_user = user_load_by_name($uid);
+                                        // si l'utilisateur existe a partir de son nom d'utilisateur
+                                        if ($existing_user) {
+                                            // si le champ de l'utilisateur field_collectivité est vide
+
+
+                                            if ($existing_user->get('field_collectivite')[0] == null) {
+
+                                                // si le champ département existe
+                                                if (isset($group_entry['businesscategory'][0])) {
+
+                                                    if ($group_entry['businesscategory'][0] !== null) {
+                                                        $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+                                                        $term_exists = $term_storage->loadByProperties(['field_identifier' => $group_entry['cn'][0]]);
+
+                                                        // Mettez à jour le champ field_collectivite avec la valeur de businessCategory.
+                                                        $existing_user->set('field_collectivite', $term_exists);
+                                                        $existing_user->save();
+                                                        $message = 'Le Champ field_collectivite de ' . $uid . ' a été mis à jour.';
+                                                        $messenger->addMessage($message);
+                                                    }
+                                                }
+                                            }
+
+                                            if (!isset($group_entry['businesscategory'][0])) {
+
+                                                $array_current_field_applicatifs = array();
+
+                                                //TODO : faire un get puis ajouter dans l'array le term récupéré
+                                                foreach ($existing_user->get('field_groupes_applicatifs') as $value) {
+                                                    $current_id = ($value->getValue()['target_id']);
+                                                    array_push($array_current_field_applicatifs, $current_id);
+                                                }
+
+                                                $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+                                                $terms = $term_storage->loadByProperties(['field_identifier' => $group_entry['cn'][0]]);
+                                                $id_term = array_keys($terms)[0];
+                                                array_push($array_current_field_applicatifs, $id_term);
+
+                                                $existing_user->set('field_groupes_applicatifs', array_values($array_current_field_applicatifs));
+                                                $existing_user->save();
+                                                $message = 'Le Champ field_groupe_applicatif de ' . $uid . ' a été mis à jour.';
+                                                $messenger->addMessage($message);
+                                            }
+                                        } else {
+                                            $message = 'L\'utilisateur LDAP avec UID "' . $uid . '" n\'existe pas dans Drupal.';
+                                            $messenger->addMessage($message);
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            $messenger->addMessage('Données manquantes pour le groupe LDAP.');
+                        }
+                    }
+                }
+            } else {
+                $messenger->addMessage('Aucun groupe LDAP trouvé.');
+            }
+        } else {
+            $messenger->addError('Connexion LDAP échouée...');
+        }
+        // ON FERME LA CONNEXION LDAP.
+        ldap_close($ldapconn);
+    } else {
+        $messenger->addError('Impossible de se connecter au serveur LDAP.');
+    }
+}
+function ImportUserFromLDAP($file_path, $collectivite)
+{
+    $csv_data = [];
+    $line_number = 0;
+    if (($handle = fopen($file_path, 'r')) !== FALSE) {
+        while (($data = fgetcsv($handle, 1000, ';')) !== FALSE) {
+            $line_number++;
+            if ($line_number > 3) {
+
+                $csv_data[] = $data;
+                $nom = strtolower($data[0]);
+                $prenom = strtolower($data[1]);
+                $mail = $data[2];
+                $actes = $data[4];
+                $helios = $data[5];
+                $convoc = $data[6];
+                $idelibre = $data[7];
+                $marcheSecurise = $data[8];
+                $opensign = $data[9];
+                $docAsigner = $data[10];
+                // Récupérer le terme de taxonomie sélectionné.
+                $term = Term::load($collectivite);
+                if ($term) {
+                    // Récupérer l'ID LDAP du terme.
+                    $id_ldap = $term->get('field_identifier')->value;
+                }
+                $username = $prenom . '.' . $nom . '@' . $id_ldap;
+
+
+
+                if ($data[11] || $data[12]) {
+                    $parapheur = 1;
+                }
+                $variables = [];
+                if ($helios == 1) {
+                    $variables[] = 'agent helios';
+                }
+                if ($convoc == 1) {
+                    $variables[] = 'agent_convocation';
+                }
+                if ($actes == 1) {
+                    $variables[] = 'agent actes';
+                }
+                if ($docAsigner == 1) {
+                    $variables[] = 'agent_document';
+                }
+
+                $messenger = \Drupal::messenger();
+                $ldapconn = ldap_connect(SERVER, PORT)
+                    or die("Impossible de se connecter au serveur LDAP.");
+                ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+                if ($ldapconn) {
+
+                    $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
+
+                    if ($ldapbind) {
+                        $dn = OU_FOR_PEOPLE . ',' . BASE_DN;
+
+                        $filter = "(uid=" . $username . ")";
+
+                        $result = ldap_search($ldapconn, $dn, $filter);
+                        $data = ldap_get_entries($ldapconn, $result);
+
+                        $nbresultats = $data["count"];
+
+                        if ($nbresultats == 0) {
+
+                            $attributes = [
+                                'uid' => $username,
+                                'cn' => $nom . " " . $prenom,
+                                'sn' => $nom,
+                                'givenName' => $prenom,
+                                'mail' => $mail,
+                                'objectClass' => ['inetOrgPerson', 'organizationalPerson', 'person'],
+                            ];
+                            $add = ldap_add($ldapconn, 'uid=' . $username . ',' . $dn, $attributes);
+                            if ($add) {
+                                $confirm = 'L\'utilisateur à bien été créé dans l\'annuaire LDAP sous le nom ' . $username;
+                                $messenger->addMessage($confirm);
+                            } else {
+                                $confirm = 'L\'utilisateur ' . $username . ' n\'a pas pu être créé dans l\'annuaire';
+                                $messenger->addMessage($confirm);
+                            }
+                        }
+                    }
+                }
+                ldap_close($ldapconn);
+
+
+                $query_params = http_build_query([
+                    'prenom' => $prenom,
+                    'nom' => $nom,
+                    'email' => $mail,
+                    'login' => $username,
+                    'password' => '123456'
+                ]);
+
+                $ch = curl_init();
+
+                $url = "https://pastelldev.ecollectivites.fr/api/create-utilisateur.php?" . $query_params;
+
+                curl_setopt($ch, CURLOPT_URL, $url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+                curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+                curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+                global $headers;
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+                $result = curl_exec($ch);
+                $messenger->addMessage("Création de l'utilisateur sur Pastell : " . $result);
+                if (curl_errno($ch)) {
+                    drupal_set_message('Error:' . curl_error($ch));
+                }
+                curl_close($ch);
+                $result = json_decode($result);
+
+                $new_user = User::create();
+                $new_user->setUsername($username);
+                $new_user->setPassword(\Drupal::service('password_generator')->generate());
+                $new_user->enforceIsNew();
+                $new_user->activate();
+                $new_user->set("mail", $mail);
+                $new_user->set("field_nom", $nom);
+                $new_user->set("field_prenom", $prenom);
+                $new_user->set("field_collectivite", $collectivite);
+                $message = 'L\'utilisateur Drupal avec uid "' . $username . '" a été créé.';
+                $messenger->addMessage($message);
+                $messenger->addMessage('Ajout des infos Pastell...');
+                $id_u = $result->id_u;
+
+                
+                $groupes_applicatifs = [];
+        
+                
+                if ($actes == 1) {
+                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL ACTES']);
+                  $groupes_applicatifs[] = reset($term)->id();
+                }
+                if ($helios == 1) {
+                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL HELIOS']);
+                  $groupes_applicatifs[] = reset($term)->id();
+                }
+                if ($convoc == 1) {
+                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL CONVOCATIONS']);
+                  $groupes_applicatifs[] = reset($term)->id();
+                }
+                if ($idelibre == 1) {
+                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'IDELIBRE']);
+                  $groupes_applicatifs[] = reset($term)->id();
+                }
+                if ($marcheSecurise == 1) {
+                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'MARCHES SECURISES']);
+                  $groupes_applicatifs[] = reset($term)->id();
+                }
+                if ($opensign == 1) {
+                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'OPENSIGN']);
+                  $groupes_applicatifs[] = reset($term)->id();
+                }
+                if ($docAsigner == 1) {
+                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL DOCUMENTS à FAIRE SIGNER']);
+                  $groupes_applicatifs[] = reset($term)->id();
+                }
+                if ($parapheur == 1) {
+                    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PARAPHEUR']);
+                    $groupes_applicatifs[] = reset($term)->id();
+                  }
+                if ($actes == 1 || $helios == 1 || $convoc == 1 || $idelibre == 1 || $marcheSecurise == 1 || $opensign == 1 || $docAsigner == 1) {
+                    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL']);
+                    $groupes_applicatifs[] = reset($term)->id();
+                  }
+                // Associer les groupes applicatifs à l'utilisateur
+                if (!empty($groupes_applicatifs)) {
+                  $new_user->set('field_groupes_applicatifs', $groupes_applicatifs);
+                }
+                $new_user->set("field_id_utilisateur_pastell", $id_u);
+
+                $new_user->save();
+            }
+        }
+        fclose($handle);
+    }
+
+    return $csv_data;
+}

@@ -1,0 +1,8 @@
+name: 'LDAP Importer'
+type: module
+description: 'Imports data from an LDAP server into Drupal.'
+core_version_requirement: ^10 || ^11
+package: Custom
+version: 1.0
+dependencies:
+  - drupal:ldapconnector
