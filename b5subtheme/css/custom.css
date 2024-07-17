@@ -1,0 +1,61 @@
+/* header nav {
+        background-color: #1f3089;
+} */
+.region-nav-main ul.navbar-nav, ul[data-block="nav_admin_pleiade"],   ul[data-block="nav_admin_groupe"]
+{
+        color: #FFF;
+        text-transform: uppercase;
+        font-size: large!important;
+}
+span.nav-link.dropdown-toggle{
+        margin: 0 1em;
+}
+.dropdown-menu li.nav-item {
+        color: #FFF;
+        text-transform: uppercase;
+        
+        font-size: large;
+    }
+.nav-link:hover, .media-library-view--widget .view-header a:hover, .nav-link:focus, .media-library-view--widget .view-header a:focus {
+        color: #FFF!important;
+    }
+.navbar > .container {
+        flex-direction: column;
+}
+
+.navbar-expand-lg{
+        margin: 0 0 1em;
+}
+
+main.container{
+        max-width: 90%!important;
+}
+ul.navbar-nav.justify-content-end.flex-wrap.nav-level-0, 
+nav#block-b5subtheme-menupouradmindegroupes, 
+ul.nav.navbar-nav{
+        flex-direction: row!important;
+}
+.region.region-nav-main {
+        display: flex;
+        align-items: center;
+    }
+.view-header a, .view-header a[href="/admin/people/create"], div#block-b5subtheme-content>a {
+        font-size: 1rem;
+        border: 2px solid;
+        padding:  0.375em 0.75em;
+        text-decoration: initial;
+        color: #FFF;
+        background-color: #1f3889;
+        border-radius: 0.375rem;
+}
+form[action="/list_users"] .form--inline, form[action="/list_collectivites"] .form--inline  {
+        display: flex;
+        align-items: flex-end;
+}
+.navbar-brand img{
+        margin: 0!important;
+}
+.region-nav-admin-groupe, .region-nav-admin-pleiade{
+        display: flex;
+        align-items: center;
+      }

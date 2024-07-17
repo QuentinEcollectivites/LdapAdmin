@@ -1,0 +1,66 @@
+<?php
+
+/**
+ * @file
+ * B5 Drupal LDAp theme file.
+ */
+use Drupal\taxonomy\Entity\Term;
+
+/**
+ * Implements hook_preprocess_HOOK() for block templates.
+ */
+function b5subtheme_preprocess_page(&$variables)
+{
+
+        foreach (\Drupal::theme()->getActiveTheme()->getRegions() as $region) {
+                if (!isset($variables['page'][$region])) {
+                        $variables['page'][$region] = [];
+                }
+        }
+        // Récupère le service de session.
+        $current_user_id = \Drupal::currentUser()->id();
+        $current_user = \Drupal\user\Entity\User::load($current_user_id);
+        $roles = $current_user->getRoles();
+        $collectivite = $current_user->get('field_collectivite')->referencedEntities()[0]->get('field_identifier')->getValue()[0]['value'];
+        // $current_user->get('field_collectivite')->referencedEntities()[0]->get('field_identifier')->getValue()[0]['value']
+        $variables['coll'] = $collectivite;
+        if (in_array('administrator', $roles)) {
+                $variables['is_super_admin'] = 1;
+        } else {
+                $variables['is_super_admin'] = 0;
+        }
+
+        if (in_array('admin_pleiade', $roles) && !in_array('administrator', $roles)) {
+                $variables['is_admin_pleiade'] = 1;
+        } else {
+                $variables['is_admin_pleiade'] = 0;
+        }
+        $current_user_grp_applis = $current_user->get('field_groupes_applicatifs')->getValue();
+        
+        // dpm($current_user_grp_applis);
+        if (!$current_user_grp_applis) {
+                $variables['is_admin_groupe'] = 0;
+        }
+        foreach ($current_user_grp_applis as $group) {
+                if ($group['target_id'] == '154') {
+                        if (!in_array('administrator', $roles) && !in_array('admin_pleiade', $roles)) {
+                                
+                                $variables['is_admin_groupe'] = 1;
+                        } else {
+                                $variables['is_admin_groupe'] = 0;
+                        }
+                }
+        }
+        // dpm($variables);
+        $variables['userId'] = $variables['user']->id();
+    
+    // gets current user name
+    $user_logged_in_name = $variables['user']->getDisplayName();
+    
+    // creates value to ouput in the DOM & capitalize first letter
+    $variables['user_logged_in_name'] = ucfirst($user_logged_in_name);
+
+    // gets user email
+    $user_email = $variables['user']->getEmail();
+    $variables['user_email'] = $user_email;
+}

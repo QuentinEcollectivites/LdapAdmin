@@ -1,0 +1,26 @@
+name: 'B5 Drupal LDAp'
+type: theme
+description: 'B5 Drupal LDAp subtheme based on Bootstrap 5 theme.'
+core_version_requirement: '^9.4 || ^10'
+'base theme': bootstrap5
+libraries:
+  - b5subtheme/global-styling
+  - b5subtheme/custom-css
+ckeditor_stylesheets:
+  - css/style.css
+ckeditor5-stylesheets:
+  - css/ck5style.css
+regions:
+  header: Header
+  nav_branding: 'Navigation branding region'
+  nav_admin_pleiade: 'Main navigation region for Admin Pleiade'
+  nav_admin_groupe: 'Main navigation region for Admin de groupe'
+  nav_main: 'Main navigation region'
+  nav_additional: 'Additional navigation region (eg search form, social icons, etc)'
+  breadcrumb: Breadcrumbs
+  content: 'Main content'
+  sidebar_first: 'Sidebar first'
+  sidebar_second: 'Sidebar second'
+  footer: Footer
+libraries-override:
+  bootstrap5/global-styling: false

@@ -1,0 +1,41 @@
+<body>
+  
+  <header class="mb-3 py-2 d-flex justify-content-center" style="background-color: #1f3889;">
+    
+    <div class="d-flex justify-content-center align-items-center">
+    {{ page.nav_branding }}
+    </div>
+    {% if is_admin_groupe == 1 %}
+        <div class="d-flex flex-row justify-content-center">
+        {{ page.nav_admin_groupe }}
+        </div>
+    {% endif %}
+    {% if is_admin_pleiade %}
+        <div class="d-flex flex-row justify-content-center">
+        {{ page.nav_admin_pleiade }}
+        </div>
+
+    {% endif %}
+    {% if is_super_admin == 1 %}
+        <div class="d-flex flex-row justify-content-center">
+        {{ page.nav_main }}
+        </div> 
+    {% endif %}
+    {% if is_admin_groupe == 1 %}  
+        <h5 class="position-absolute top-0 end-0 p-2 text-white">Administrateur de la collectivité : {{ coll }}</h5>
+    {% endif %}
+    {% if is_admin_pleiade %}
+        <h5 class="position-absolute top-0 end-0 p-2 text-white">Administrateur Pléiade</h5>
+    {% endif %}
+    {% if is_super_admin == 1 %}
+        <h5 class="position-absolute top-1 end-0 p-2 text-white">Administrateur</h5>
+    {% endif %}
+    <a class=" position-absolute end-0 mt-4 me-2" href="/user/logout">Déconnexion</a>
+  </header>
+
+  
+  <main role="main" class="container {% if is_admin_groupe %}admin_groupe{% endif %} {% if is_admin_pleiade %}admin_pleiade{% endif %}">
+    {{ page.content }}
+  </main>
+ 
+</body>
