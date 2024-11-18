@@ -27,9 +27,10 @@ span.nav-link.dropdown-toggle{
         margin: 0 0 1em;
 }
 
-main.container{
-        max-width: 90%!important;
-}
+main.container {
+        max-width: 95% !important;
+        margin: 1em 0em 0em 48px !important;
+    }
 ul.navbar-nav.justify-content-end.flex-wrap.nav-level-0, 
 nav#block-b5subtheme-menupouradmindegroupes, 
 ul.nav.navbar-nav{
@@ -39,7 +40,7 @@ ul.nav.navbar-nav{
         display: flex;
         align-items: center;
     }
-.view-header a, .view-header a[href="/admin/people/create"], div#block-b5subtheme-content>a {
+.view-header a, .view-header a[href="/custom-button-execute"], .view-header a[href="/admin/people/create"], div#block-b5subtheme-content>a {
         font-size: 1rem;
         border: 2px solid;
         padding:  0.375em 0.75em;
@@ -59,3 +60,141 @@ form[action="/list_users"] .form--inline, form[action="/list_collectivites"] .fo
         display: flex;
         align-items: center;
       }
+.tooltip {
+position: relative;
+display: inline-block;
+opacity: 1;
+}
+
+.tooltip .tooltiptext {
+visibility: hidden;
+width: 200px;
+background-color: #555;
+color: #fff;
+text-align: center;
+border-radius: 6px;
+padding: 5px 0;
+position: absolute;
+z-index: 1;
+bottom: 125%;
+left: 50%;
+margin-left: -60px;
+opacity: 0;
+transition: opacity 0.3s;
+}
+
+.tooltip .tooltiptext::after {
+content: "";
+position: absolute;
+top: 100%;
+left: 50%;
+margin-left: -5px;
+border-width: 5px;
+border-style: solid;
+border-color: #555 transparent transparent transparent;
+}
+
+.tooltip:hover .tooltiptext {
+visibility: visible;
+opacity: 1;
+}
+
+.form--inline.clearfix{
+    display: flex;
+    align-items: flex-end;
+}   
+.js-form-item.form-item.js-form-type-entity-autocomplete.form-type-entity-autocomplete.js-form-item-field-groupes-applicatifs-target-id.form-item-field-groupes-applicatifs-target-id, .js-form-item.form-item.js-form-type-entity-autocomplete.form-type-entity-autocomplete.js-form-item-field-collectivite-target-id.form-item-field-collectivite-target-id{
+width: 20%!important;
+}
+
+.sidebar {
+        padding-top: 5em!important;
+        z-index: 500;
+        color: white;
+	display: flex;
+	flex-direction: column;
+	position: fixed;
+	top: 0;
+	left: 0;
+	height: 100vh;
+	width: 48px;
+        padding: 0;
+        margin: 0;
+	background-color: #1f3889;
+	overflow: hidden;
+	transition: width 0.2s cubic-bezier(0.42, 0, 0.58, 1);
+}
+
+.sidebar:hover {
+	width: 200px;
+}
+.sidebar:hover h5.text-white{
+	transform: unset;
+        position: unset;
+        left: unset;
+        bottom: unset;
+        transition: transform 0.1s;
+        padding-left: 12px;
+}
+h5.text-white{
+        transition: transform 0.1s;
+        transform: rotate(-90deg);position: fixed;left: -45px;bottom: 120px;
+}
+h5.admin_pleiade{
+        transition: transform 0.1s;
+        transform: rotate(-90deg);position: fixed;left: -80px;bottom: 140px;
+}
+h5.admin_groupe{
+        transition: transform 0.1s;
+        transform: rotate(-90deg);
+        position: fixed;
+        left: -110px;
+        bottom: 170px;
+}
+.menu-item:hover {
+	border: 1px solid white;
+}
+
+.sidebar:hover .label{
+	opacity: 1;
+}
+
+.sidebar .menu-item {
+	padding: 12px;
+	text-decoration: none;
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	cursor: pointer;
+        
+}
+.sidebar a {
+        text-decoration: none; /* Supprime le soulignement */
+        color: inherit;        /* Garde la couleur originale du texte */
+        background: none;      /* Supprime tout arrière-plan ajouté */
+        transition: none;      /* Supprime les transitions */
+    }
+.menu-item .icon {
+	text-align: center;
+	padding: 4px;
+}
+
+.menu-item:hover {
+	background: white;
+	color: #1d1d1d;
+}
+
+.menu-item .label {
+	opacity: 0;
+	transition: opacity 0.4s ease-in-out; 
+}
+
+.menu-item:last-child {
+	width: 100%;
+}
+
+[class*="fa-"]::before {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+}

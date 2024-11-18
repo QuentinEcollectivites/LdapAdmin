@@ -24,7 +24,7 @@ function get_id_user_pastell()
 
     $ch = curl_init();
 
-    $url = "https://pastelldev.ecollectivites.fr/api/list-utilisateur.php";
+    $url = "https://pastelltest.ecollectivites.fr/api/list-utilisateur.php";
 
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -51,7 +51,7 @@ function get_role_user($id_u)
 
     $ch = curl_init();
 
-    curl_setopt($ch, CURLOPT_URL, "pastelldev.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u);
+    curl_setopt($ch, CURLOPT_URL, "pastelltest.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -410,26 +410,33 @@ function synchro_groups_from_ldap()
                                                 }
                                             }
 
-                                            if (!isset($group_entry['businesscategory'][0])) {
+						if (!isset($group_entry['businesscategory'][0])) {
+    // Fetch the current target IDs from 'field_groupes_applicatifs'.
+    $array_current_field_applicatifs = [];
+    
+    foreach ($existing_user->get('field_groupes_applicatifs') as $value) {
+        $current_id = $value->getValue()['target_id'];
+        $array_current_field_applicatifs[] = $current_id;
+    }
 
-                                                $array_current_field_applicatifs = array();
+    // Retrieve the term ID for the current LDAP group.
+    $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+    $terms = $term_storage->loadByProperties(['field_identifier' => $group_entry['cn'][0]]);
+    $id_term = array_keys($terms)[0];
 
-                                                //TODO : faire un get puis ajouter dans l'array le term récupéré
-                                                foreach ($existing_user->get('field_groupes_applicatifs') as $value) {
-                                                    $current_id = ($value->getValue()['target_id']);
-                                                    array_push($array_current_field_applicatifs, $current_id);
-                                                }
+    // Check if the term is already present in 'field_groupes_applicatifs'.
+    if (!in_array($id_term, $array_current_field_applicatifs)) {
+        // If not, add the term ID.
+        $array_current_field_applicatifs[] = $id_term;
+    }
+    // Set the updated array of term IDs.
+    $existing_user->set('field_groupes_applicatifs', array_values($array_current_field_applicatifs));
+    $existing_user->save();
 
-                                                $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
-                                                $terms = $term_storage->loadByProperties(['field_identifier' => $group_entry['cn'][0]]);
-                                                $id_term = array_keys($terms)[0];
-                                                array_push($array_current_field_applicatifs, $id_term);
-
-                                                $existing_user->set('field_groupes_applicatifs', array_values($array_current_field_applicatifs));
-                                                $existing_user->save();
-                                                $message = 'Le Champ field_groupe_applicatif de ' . $uid . ' a été mis à jour.';
-                                                $messenger->addMessage($message);
-                                            }
+    // Notify that the field has been updated.
+    $message = 'Le Champ field_groupe_applicatif de ' . $uid . ' a été mis à jour.';
+    $messenger->addMessage($message);
+}
                                         } else {
                                             $message = 'L\'utilisateur LDAP avec UID "' . $uid . '" n\'existe pas dans Drupal.';
                                             $messenger->addMessage($message);
@@ -622,7 +629,7 @@ function ImportUserFromLDAP($file_path, $collectivite)
 
                 $ch = curl_init();
 
-                $url = "https://pastelldev.ecollectivites.fr/api/create-utilisateur.php?" . $query_params;
+                $url = "https://pastelltest.ecollectivites.fr/api/create-utilisateur.php?" . $query_params;
 
                 curl_setopt($ch, CURLOPT_URL, $url);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);

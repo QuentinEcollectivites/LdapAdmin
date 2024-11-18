@@ -11,7 +11,7 @@ use Drupal\taxonomy\Entity\Term;
  */
 function b5subtheme_preprocess_page(&$variables)
 {
-
+$messenger = \Drupal::messenger();
         foreach (\Drupal::theme()->getActiveTheme()->getRegions() as $region) {
                 if (!isset($variables['page'][$region])) {
                         $variables['page'][$region] = [];
@@ -20,10 +20,13 @@ function b5subtheme_preprocess_page(&$variables)
         // Récupère le service de session.
         $current_user_id = \Drupal::currentUser()->id();
         $current_user = \Drupal\user\Entity\User::load($current_user_id);
-        $roles = $current_user->getRoles();
-        $collectivite = $current_user->get('field_collectivite')->referencedEntities()[0]->get('field_identifier')->getValue()[0]['value'];
-        // $current_user->get('field_collectivite')->referencedEntities()[0]->get('field_identifier')->getValue()[0]['value']
+        
+        if($current_user_id && $current_user && $current_user->get('field_collectivite')){
+                $collectivite = $current_user->get('field_collectivite')->referencedEntities()[0]->get('field_identifier')->getValue()[0]['value'];
+        }
         $variables['coll'] = $collectivite;
+        $roles = $current_user->getRoles();
+        $variables['is_user_logged_in'] = \Drupal::currentUser()->isAuthenticated() ? 1 : 0;
         if (in_array('administrator', $roles)) {
                 $variables['is_super_admin'] = 1;
         } else {
@@ -42,7 +45,7 @@ function b5subtheme_preprocess_page(&$variables)
                 $variables['is_admin_groupe'] = 0;
         }
         foreach ($current_user_grp_applis as $group) {
-                if ($group['target_id'] == '154') {
+                if ($group['target_id'] == '103') {
                         if (!in_array('administrator', $roles) && !in_array('admin_pleiade', $roles)) {
                                 
                                 $variables['is_admin_groupe'] = 1;
@@ -51,9 +54,7 @@ function b5subtheme_preprocess_page(&$variables)
                         }
                 }
         }
-        // dpm($variables);
         $variables['userId'] = $variables['user']->id();
-    
     // gets current user name
     $user_logged_in_name = $variables['user']->getDisplayName();
     

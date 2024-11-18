@@ -14,79 +14,12 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\user\Entity\User;
 use GuzzleHttp\Client;
-use Drupal\Component\Render\FormattableMarkup;
+use GuzzleHttp\Exception\RequestException;
 
-function ldapconnector_preprocess_views_view_field(&$variables)
-{
-        // Vérifiez si c'est la vue que vous souhaitez cibler.
-        if (($variables['view']->id() == 'liste_des_utilisateurs' || $variables['view']->id() == 'user_by_collectivite' || $variables['view']->id() == 'user_by_applicatif') && $variables['field']->field == 'field_entite_role_pastell') {
-                // Récupérez la valeur du champ.
-                $field_value = $variables['row']->_entity->get('field_entite_role_pastell')->value;
 
-                // Décoder la chaîne JSON en tableau associatif.
-                $field_value_array = json_decode($field_value, TRUE);
-                
-                // Initialisez la sortie HTML.
-                $output_html = '';
-
-                // Parcourez les entités et leurs rôles.
-                if ($field_value_array && is_array($field_value_array)) {
-                        foreach ($field_value_array as $entite_data) {
-                                if (isset($entite_data['field_entite'], $entite_data['field_role'])) {
-
-        $entite = $entite_data['field_entite'];                                     
-        $entite_denomination = detail_entite_pastell($entite);
-        
-        if($entite_denomination == 0){
-                $entite_denomination = "ADMINISTRATEUR";
-        };
-        $roles = $entite_data['field_role'];
-        $roles_list = implode(", ", array_keys($roles));
-        // $output_html .= '<span title="' . htmlspecialchars($roles_list) . '">' . $entite_denomination . '</span>,';
-        $output_html .= '<div class="tooltip"> ' . $entite_denomination . ' <span class="tooltiptext">' . htmlspecialchars($roles_list) . '</span></div> , ';
-                                }
-                                 
-                        }
-                        // Supprimer le dernier <br>.
-                        $output_html = rtrim($output_html, ' , ');
- 
-                        // Affectez le HTML généré à la sortie du champ.
-                        $variables['output'] = new FormattableMarkup($output_html, []);
-                }
-                else{
-                        $variables['output'] = new FormattableMarkup('Aucune entité Pastell', []);
-                }
-        }
-        
-}
-function detail_entite_pastell($id_e)
-{
-        $ch = curl_init();
-        $url = "https://pastelldev.ecollectivites.fr/api/detail-entite.php?id_e=" . $id_e;
-
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
-        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
-
-        global $headers;
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-        $result = curl_exec($ch);
-        if (curl_errno($ch)) {
-                drupal_set_message('Error:' . curl_error($ch));
-        }
-        curl_close($ch);
-        $result = json_decode($result);
-        
-        return $result->denomination;
-}
 function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_id)
 {
-        $autorisé = 0;
+        // dpm($form);
         $messenger = \Drupal::messenger();
         $current_user_id = \Drupal::currentUser()->id();
         $current_user = \Drupal\user\Entity\User::load($current_user_id);
@@ -108,6 +41,7 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
 
                 
                 $current_user_collectivite = $current_user->get('field_collectivite')->getValue()[0]["target_id"];
+
                 if (!empty($current_user_collectivite)) {
 
                         $name_of_edit_profile = $form["account"]["name"]["#default_value"];
@@ -119,7 +53,7 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
                         }
 
                         foreach ($current_user_grp_applis as $group) {
-                                if ($group['target_id'] == '103') {
+                                if ($group['target_id'] == '154') {
                                         $autorisé = 1;
                                         
                                 }
@@ -307,7 +241,7 @@ function get_all_coll()
         $options[0] = 'Sélectionnez une entité';
         $ch = curl_init();
 
-        curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-entite.php");
+        curl_setopt($ch, CURLOPT_URL, "pastelldev.ecollectivites.fr/api/list-entite.php");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -336,7 +270,7 @@ function get_all_role()
 
         $ch = curl_init();
 
-        curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-roles.php");
+        curl_setopt($ch, CURLOPT_URL, "pastelldev.ecollectivites.fr/api/list-roles.php");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -365,7 +299,7 @@ function get_id_u_pastell(){
         
         $ch = curl_init();
 
-        $url = "https://pastelltest.ecollectivites.fr/api/list-utilisateur.php";
+        $url = "https://pastelldev.ecollectivites.fr/api/list-utilisateur.php";
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -399,7 +333,7 @@ function add_user_to_pastell($account)
 
         $ch = curl_init();
 
-        $url = "https://pastelltest.ecollectivites.fr/api/create-utilisateur.php?" . $query_params;
+        $url = "https://pastelldev.ecollectivites.fr/api/create-utilisateur.php?" . $query_params;
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -444,7 +378,7 @@ function add_roles_to_pastell_user($account, $id_u)
                                 ]);
                                 $ch = curl_init();
 
-                                $url = "https://pastelltest.ecollectivites.fr/api/add-several-role-utilisateur.php?" . $query_params;
+                                $url = "https://pastelldev.ecollectivites.fr/api/add-several-role-utilisateur.php?" . $query_params;
 
                                 curl_setopt($ch, CURLOPT_URL, $url);
                                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -485,7 +419,7 @@ function remove_role_pastell($account){
 
         $ch = curl_init();
 
-        $url = "https://pastelltest.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u;
+        $url = "https://pastelldev.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u;
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -510,7 +444,7 @@ function remove_role_pastell($account){
                         
                                 $ch = curl_init();
                                 
-                                $url = "https://pastelltest.ecollectivites.fr/api/delete-role-utilisateur.php?id_u=" .$detail->id_u ."&id_e=".$detail->id_e."&role=".$detail->role."";
+                                $url = "https://pastelldev.ecollectivites.fr/api/delete-role-utilisateur.php?id_u=" .$detail->id_u ."&id_e=".$detail->id_e."&role=".$detail->role."";
                                 $url = str_replace(' ', '%20', $url);
                                
                                 curl_setopt($ch, CURLOPT_URL, $url);

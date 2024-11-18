@@ -23,3 +23,11 @@ ldapconnector.listEntries:
   requirements:
     _permission: 'access content'
 
+ldapconnector.get_connexion:
+  path: '/custom-button-execute'
+  defaults:
+    _controller: '\Drupal\ldapconnector\Controller\LdapController::get_connexion'
+    _title: 'Execute function'
+  requirements:
+    _permission: 'access content'
+

@@ -4,10 +4,13 @@ form#user-register-form,
 display: flex;
 flex-wrap: wrap;
 }
+div#edit-field-collectivite-wrapper{
+width: 75%
+}
 
 div#edit-field-nom-wrapper, div#edit-field-prenom-wrapper,
-div#edit-field-collectivite-wrapper, .form-type-email, .form-item-cas-username{
-  width: 50%;
+ .form-type-email, .form-item-cas-username{
+  width: 33%;
 }
 .form-item-cas-enabled, .form-item-notify{
   display: none;
@@ -27,7 +30,8 @@ div#edit-field-collectivite-wrapper, .form-type-email, .form-item-cas-username{
   width: 20%;
 }
 .admin_pleiade .js-form-item-roles-content-editor, 
-.admin_pleiade .js-form-item-roles-administrator
+.admin_pleiade .js-form-item-roles-administrator,
+.admin_groupe .js-form-item.form-item.js-form-type-password.form-type-password.js-form-item-current-pass.form-item-current-pass
 {
 display: none;
 }

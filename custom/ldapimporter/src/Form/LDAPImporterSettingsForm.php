@@ -54,7 +54,7 @@ class LDAPImporterSettingsForm extends ConfigFormBase {
     '#options' => $collectivites,
     '#empty_option' => $this->t('- Sélectionner une collectivité -'),
     '#description' => $this->t('Si la collectivité n\'existe pas, la créé avant d\'importer les utilisateurs.'),
-    '#required' => TRUE,
+    
   ];
     // Autres éléments de formulaire ici.
   

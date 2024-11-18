@@ -9,6 +9,8 @@ use Drupal\Core\Url;
 use Drupal\Core\Access\AccessResult;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Render\Renderer;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use GuzzleHttp\Exception\RequestException;
 
 class LdapController extends ControllerBase
 {
@@ -125,7 +127,47 @@ class LdapController extends ControllerBase
     return AccessResult::allowed();
   }
 
+function get_connexion() {
+    // URL de l'API
+    $api_url = 'https://pleiadetest.ecollectivites.fr/export/users/connexion';
+    
+    try {
+      // Utiliser le service HTTP de Drupal pour faire une requête API
+      $client = \Drupal::httpClient();
+      $response = $client->get($api_url, ['timeout' => 30]);
 
+      // Si la réponse est 200, nous continuons
+      if ($response->getStatusCode() == 200) {
+        // Récupérer les données JSON
+        $data = json_decode($response->getBody(), TRUE);
+
+        // Parcourir chaque utilisateur dans la réponse de l'API
+        foreach ($data as $item) {
+          $username_from_api = $item['name'];
+          $timestamp = $item['access'];
+
+          // Trouver l'utilisateur Drupal correspondant par nom d'utilisateur
+          $user = user_load_by_name($username_from_api);
+          if ($user) {
+
+            if($timestamp){
+                $user->set('access', $timestamp);
+                $user->save();
+            }
+          }   
+        }
+
+
+      }
+    }
+    catch (RequestException $e) {
+      // En cas d'erreur d'appel API
+      \Drupal::messenger()->addError('Erreur lors de la synchronisation des utilisateurs: ' . $e->getMessage());
+    }
+
+    $url = Url::fromRoute('<front>')->toString();
+    return new RedirectResponse($url);
+  }
   /**
    * Load all user entities.
    *
