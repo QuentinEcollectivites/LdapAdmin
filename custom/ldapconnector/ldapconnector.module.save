@@ -1373,7 +1373,8 @@ function add_user_to_pastell($account)
                 'nom' => $account->get('field_nom')->getValue()[0]['value'],
                 'email' => $account->getEmail(),
                 'login' => $account->name->value,
-                'password' => 'GFYUrfhgueizfghigzd1564!'
+                'password' => 'GFYUrfhgueizfghigzd1564!',
+		'api_user' => 'true',
         ]);
 
         $ch = curl_init();

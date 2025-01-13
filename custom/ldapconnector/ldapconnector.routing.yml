@@ -31,3 +31,10 @@ ldapconnector.get_connexion:
   requirements:
     _permission: 'access content'
 
+ldapconnector.autocomplete_entite:
+  path: '/ldapconnector/autocomplete-entite'
+  defaults:
+    _controller: 'ldapconnector_autocomplete_entite'
+    _title: 'Autocomplete Entité'
+  requirements:
+    _permission: 'access content'

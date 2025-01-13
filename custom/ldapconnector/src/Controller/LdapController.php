@@ -33,6 +33,25 @@ class LdapController extends ControllerBase
       $container->get('renderer')
     );
   }
+public function autocompleteEntite($string = '') {
+
+// Obtenir la saisie utilisateur.
+    $string = $request->query->get('q');
+
+    // Récupérer toutes les entités via la fonction get_all_coll().
+    $options = get_all_coll();
+
+    // Filtrer les entités selon la saisie utilisateur.
+    $matches = [];
+    foreach ($options as $key => $label) {
+        if (stripos($label, $string) !== FALSE) {
+            $matches[] = ['value' => $label, 'label' => $label];
+        }
+    }
+
+    // Retourner les résultats sous forme JSON.
+    return new \Symfony\Component\HttpFoundation\JsonResponse($matches);
+}
 
   public function listEntries()
   {
@@ -53,7 +72,7 @@ class LdapController extends ControllerBase
 
     $current_user_grp_applis = $current_user->get('field_groupes_applicatifs')->getValue();
     foreach ($current_user_grp_applis as $group) {
-      if ($group['target_id'] == '154') {
+      if ($group['target_id'] == '103') {
 
         $users = $this->loadAllUsers();
 
@@ -128,52 +147,65 @@ class LdapController extends ControllerBase
   }
 
 function get_connexion() {
-    // URL de l'API
+/*
+$user_ids = \Drupal::entityQuery('user')
+    ->accessCheck(FALSE)
+    ->execute();
+  $users = User::loadMultiple($user_ids);
+
+  foreach ($users as $user) {
+    if ($user->hasField('field_groupes_applicatifs')) {
+      $values = $user->get('field_groupes_applicatifs')->getValue();
+
+      $unique_values = array_unique(array_column($values, 'target_id'));
+
+      $new_values = [];
+      foreach ($unique_values as $value) {
+        $new_values[] = ['target_id' => $value];
+      }
+
+      if (count($new_values) < count($values)) {
+        $user->set('field_groupes_applicatifs', $new_values);
+        $user->save();
+      }
+    }
+  }
+
+*/
+
     $api_url = 'https://pleiadetest.ecollectivites.fr/export/users/connexion';
-    
     try {
-      // Utiliser le service HTTP de Drupal pour faire une requête API
       $client = \Drupal::httpClient();
       $response = $client->get($api_url, ['timeout' => 30]);
-
-      // Si la réponse est 200, nous continuons
       if ($response->getStatusCode() == 200) {
-        // Récupérer les données JSON
         $data = json_decode($response->getBody(), TRUE);
-
-        // Parcourir chaque utilisateur dans la réponse de l'API
         foreach ($data as $item) {
           $username_from_api = $item['name'];
           $timestamp = $item['access'];
-
-          // Trouver l'utilisateur Drupal correspondant par nom d'utilisateur
           $user = user_load_by_name($username_from_api);
           if ($user) {
-
             if($timestamp){
                 $user->set('access', $timestamp);
                 $user->save();
             }
           }   
         }
-
-
       }
     }
     catch (RequestException $e) {
-      // En cas d'erreur d'appel API
       \Drupal::messenger()->addError('Erreur lors de la synchronisation des utilisateurs: ' . $e->getMessage());
     }
-
     $url = Url::fromRoute('<front>')->toString();
     return new RedirectResponse($url);
-  }
+
+}
+
   /**
    * Load all user entities.
    *
    * @return \Drupal\user\Entity\User[]
    */
-  private function loadAllUsers()
+private function loadAllUsers()
   {
     $query = \Drupal::entityQuery('user')
       ->condition('status', 1); // Active users

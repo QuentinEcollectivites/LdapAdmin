@@ -35,6 +35,15 @@
     </a>
     {% endif %}
 
+{% if is_admin_pleiade == 1 or is_super_admin == 1 %}
+<a class="menu-item" href="https://pastelltest.ecollectivites.fr">
+      <span class="icon">
+<i class="fa-solid fa-magnifying-glass"></i>
+      </span>
+      <span class="label">Pastell</span>
+    </a>
+    {% endif %}
+
     <div class="d-flex flex-wrap" style="margin-top:auto;">
       {% if is_admin_groupe == 1 %}  
         <h5 class="text-white admin_groupe">Administrateur de collectivité</h5>

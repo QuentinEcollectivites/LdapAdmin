@@ -51,7 +51,7 @@ function get_role_user($id_u)
 
     $ch = curl_init();
 
-    curl_setopt($ch, CURLOPT_URL, "pastelltest.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u);
+    curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -71,7 +71,102 @@ function get_role_user($id_u)
 
     return $result;
 }
+function import_role_user_pastell()
+{
+    $ch = curl_init();
 
+    curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-roles.php");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+    curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+    curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+    global $headers;
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    $result = curl_exec($ch);
+    if (curl_errno($ch)) {
+            drupal_set_message('Error:' . curl_error($ch));
+    }
+    curl_close($ch);
+    $result = json_decode($result);
+    // Parcourir les données et construire les options du champ select.
+    foreach ($result as $item) {
+
+        $existing_terms = \Drupal::entityTypeManager()
+        ->getStorage('taxonomy_term')
+        ->loadByProperties([
+            'vid' => 'roles_pastell',
+            'name' => $item->role,
+        ]);
+
+    if (!empty($existing_terms)) {
+        \Drupal::messenger()->addMessage('Le terme "' . $item->role . '" existe déjà.', 'status');
+        continue;
+    }
+
+    // Créer un nouveau terme.
+    $term = Term::create([
+        'vid' => 'roles_pastell',
+        'name' => $item->role,
+        'field_libelle' => $item->libelle, // Champ personnalisé pour l'ID.
+    ]);
+
+    $term->save();
+
+    \Drupal::messenger()->addMessage('Terme créé : "' . $item->role . '" avec libelle ' . $item->libelle, 'status');
+    }
+    return $result;
+}
+function import_entite_from_pastell()
+{
+    $ch = curl_init();
+
+    curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-entite.php");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+    curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+    curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+    global $headers;
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    $result = curl_exec($ch);
+    if (curl_errno($ch)) {
+        drupal_set_message('Error:' . curl_error($ch));
+    }
+    curl_close($ch);
+    $result = json_decode($result);
+    // Parcourir les données et construire les options du champ select.
+    foreach ($result as $item) {
+        $existing_terms = \Drupal::entityTypeManager()
+            ->getStorage('taxonomy_term')
+            ->loadByProperties([
+                'vid' => 'entite_pastell',
+                'name' => $item->denomination,
+            ]);
+
+        if (!empty($existing_terms)) {
+            \Drupal::messenger()->addMessage('Le terme "' . $item->denomination . '" existe déjà.', 'status');
+            continue;
+        }
+
+        // Créer un nouveau terme.
+        $term = Term::create([
+            'vid' => 'entite_pastell',
+            'name' => $item->denomination,
+            'field_id_e' => $item->id_e, // Champ personnalisé pour l'ID.
+        ]);
+
+        $term->save();
+
+        \Drupal::messenger()->addMessage('Terme créé : "' . $item->denomination . '" avec ID ' . $item->id_e, 'status');
+    }
+}
 
 
 function test_get_user_from_ldap()
@@ -410,33 +505,33 @@ function synchro_groups_from_ldap()
                                                 }
                                             }
 
-						if (!isset($group_entry['businesscategory'][0])) {
-    // Fetch the current target IDs from 'field_groupes_applicatifs'.
-    $array_current_field_applicatifs = [];
-    
-    foreach ($existing_user->get('field_groupes_applicatifs') as $value) {
-        $current_id = $value->getValue()['target_id'];
-        $array_current_field_applicatifs[] = $current_id;
-    }
+                                            if (!isset($group_entry['businesscategory'][0])) {
+                                                // Fetch the current target IDs from 'field_groupes_applicatifs'.
+                                                $array_current_field_applicatifs = [];
 
-    // Retrieve the term ID for the current LDAP group.
-    $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
-    $terms = $term_storage->loadByProperties(['field_identifier' => $group_entry['cn'][0]]);
-    $id_term = array_keys($terms)[0];
+                                                foreach ($existing_user->get('field_groupes_applicatifs') as $value) {
+                                                    $current_id = $value->getValue()['target_id'];
+                                                    $array_current_field_applicatifs[] = $current_id;
+                                                }
 
-    // Check if the term is already present in 'field_groupes_applicatifs'.
-    if (!in_array($id_term, $array_current_field_applicatifs)) {
-        // If not, add the term ID.
-        $array_current_field_applicatifs[] = $id_term;
-    }
-    // Set the updated array of term IDs.
-    $existing_user->set('field_groupes_applicatifs', array_values($array_current_field_applicatifs));
-    $existing_user->save();
+                                                // Retrieve the term ID for the current LDAP group.
+                                                $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+                                                $terms = $term_storage->loadByProperties(['field_identifier' => $group_entry['cn'][0]]);
+                                                $id_term = array_keys($terms)[0];
 
-    // Notify that the field has been updated.
-    $message = 'Le Champ field_groupe_applicatif de ' . $uid . ' a été mis à jour.';
-    $messenger->addMessage($message);
-}
+                                                // Check if the term is already present in 'field_groupes_applicatifs'.
+                                                if (!in_array($id_term, $array_current_field_applicatifs)) {
+                                                    // If not, add the term ID.
+                                                    $array_current_field_applicatifs[] = $id_term;
+                                                }
+                                                // Set the updated array of term IDs.
+                                                $existing_user->set('field_groupes_applicatifs', array_values($array_current_field_applicatifs));
+                                                $existing_user->save();
+
+                                                // Notify that the field has been updated.
+                                                $message = 'Le Champ field_groupe_applicatif de ' . $uid . ' a été mis à jour.';
+                                                $messenger->addMessage($message);
+                                            }
                                         } else {
                                             $message = 'L\'utilisateur LDAP avec UID "' . $uid . '" n\'existe pas dans Drupal.';
                                             $messenger->addMessage($message);
@@ -664,49 +759,49 @@ function ImportUserFromLDAP($file_path, $collectivite)
                 $messenger->addMessage('Ajout des infos Pastell...');
                 $id_u = $result->id_u;
 
-                
+
                 $groupes_applicatifs = [];
-        
-                
+
+
                 if ($actes == 1) {
-                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL ACTES']);
-                  $groupes_applicatifs[] = reset($term)->id();
+                    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL ACTES']);
+                    $groupes_applicatifs[] = reset($term)->id();
                 }
                 if ($helios == 1) {
-                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL HELIOS']);
-                  $groupes_applicatifs[] = reset($term)->id();
+                    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL HELIOS']);
+                    $groupes_applicatifs[] = reset($term)->id();
                 }
                 if ($convoc == 1) {
-                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL CONVOCATIONS']);
-                  $groupes_applicatifs[] = reset($term)->id();
+                    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL CONVOCATIONS']);
+                    $groupes_applicatifs[] = reset($term)->id();
                 }
                 if ($idelibre == 1) {
-                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'IDELIBRE']);
-                  $groupes_applicatifs[] = reset($term)->id();
+                    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'IDELIBRE']);
+                    $groupes_applicatifs[] = reset($term)->id();
                 }
                 if ($marcheSecurise == 1) {
-                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'MARCHES SECURISES']);
-                  $groupes_applicatifs[] = reset($term)->id();
+                    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'MARCHES SECURISES']);
+                    $groupes_applicatifs[] = reset($term)->id();
                 }
                 if ($opensign == 1) {
-                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'OPENSIGN']);
-                  $groupes_applicatifs[] = reset($term)->id();
+                    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'OPENSIGN']);
+                    $groupes_applicatifs[] = reset($term)->id();
                 }
                 if ($docAsigner == 1) {
-                  $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL DOCUMENTS à FAIRE SIGNER']);
-                  $groupes_applicatifs[] = reset($term)->id();
+                    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL DOCUMENTS à FAIRE SIGNER']);
+                    $groupes_applicatifs[] = reset($term)->id();
                 }
                 if ($parapheur == 1) {
                     $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PARAPHEUR']);
                     $groupes_applicatifs[] = reset($term)->id();
-                  }
+                }
                 if ($actes == 1 || $helios == 1 || $convoc == 1 || $idelibre == 1 || $marcheSecurise == 1 || $opensign == 1 || $docAsigner == 1) {
                     $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['name' => 'PASTELL']);
                     $groupes_applicatifs[] = reset($term)->id();
-                  }
+                }
                 // Associer les groupes applicatifs à l'utilisateur
                 if (!empty($groupes_applicatifs)) {
-                  $new_user->set('field_groupes_applicatifs', $groupes_applicatifs);
+                    $new_user->set('field_groupes_applicatifs', $groupes_applicatifs);
                 }
                 $new_user->set("field_id_utilisateur_pastell", $id_u);
 

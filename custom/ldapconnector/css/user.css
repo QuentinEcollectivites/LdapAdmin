@@ -1,6 +1,7 @@
-.js-form-item-cas-username, .js-form-item-name, .js-form-item-notify {
+/*.js-form-item-cas-username, .js-form-item-name, .js-form-item-notify {
         pointer-events: none;
 }
+*/
 .js-form-item.form-item.js-form-type-select.form-type--select.js-form-item-field-api-data.form-item--field-api-data select,
 .js-form-item.form-item.js-form-type-select.form-type--select.js-form-item-field-groupes-applicatifs.form-item--field-groupes-applicatifs select {
         height: 150px;;

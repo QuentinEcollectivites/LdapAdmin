@@ -41,6 +41,14 @@ class LDAPImporterSettingsForm extends ConfigFormBase {
         '#type' => 'submit',
         '#value' => $this->t('Lancer la récupération des groups'),
     ];
+    $form['import_pastell_entite'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Importer les entités pastell'),
+    ];
+    $form['import_role_user_pastell'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Importer les roles pastell'),
+    ];
     $form['csv_upload'] = [
       '#type' => 'file',
       '#title' => $this->t('Importer des utilisateurs'),
@@ -68,6 +76,12 @@ class LDAPImporterSettingsForm extends ConfigFormBase {
     if ($triggering_button == 'edit-test-get-users') {
         test_get_user_from_ldap();
     } 
+    elseif ($triggering_button == 'edit-import-pastell-entite') {
+      import_entite_from_pastell();
+    }
+    elseif ($triggering_button == 'edit-import-role-user-pastell') {
+      import_role_user_pastell();
+    }
     elseif ($triggering_button == 'edit-synchro-users') {   
         synchro_user_from_ldap();
     }

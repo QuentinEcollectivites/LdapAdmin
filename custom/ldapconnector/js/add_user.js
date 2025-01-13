@@ -11,6 +11,8 @@
         const prenomInput = document.getElementById("edit-field-prenom-0-value");
         const collectiviteInput = document.getElementById("edit-field-collectivite-0-target-id");
         const username = document.getElementById("edit-field-collectivite-0-target-id");
+
+
         updateNomUtilisateur();
         
         nomInput.addEventListener("input", updateNomUtilisateur);
@@ -103,9 +105,9 @@
       checkboxPastellActes.on('change', toggleFormVisibilityPastellRole);
       checkboxPastellDocs.on('change',  toggleFormVisibilityPastellDocs);
       checkboxPastellHelios.on('change',  toggleFormVisibilityPastellHelios);
+
 function updateNomUtilisateur() {
           let partieCollectivite = '';
-
           if (collectiviteInput) {
             const selectedText = collectiviteInput.value.split(" (")[0]; // Utilisation de la valeur entrée par l'utilisateur
             partieCollectivite = removeSpecialCharacters(selectedText.toLowerCase());
@@ -113,11 +115,12 @@ function updateNomUtilisateur() {
 
           const nom = removeSpecialCharacters(nomInput.value);
           const prenom = removeSpecialCharacters(prenomInput.value);
-          
           const partiePrenomNom = `${prenom}.${nom}`.toLowerCase();
+
           document.getElementById("edit-field-nom-0-value").value = nom;
           document.getElementById("edit-field-prenom-0-value").value = prenom;
           document.getElementById("edit-name").value = `${partiePrenomNom}@${partieCollectivite}`;
+document.getElementById("edit-cas-username").value = `${partiePrenomNom}@${partieCollectivite}`;
         }
 
         // Fonction pour supprimer les caractères spéciaux
