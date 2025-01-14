@@ -247,68 +247,60 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
                                 }
                         }
                 } else {
-                        $coll_options = get_all_coll();
+                       
                 }
-                $coll_options = get_all_coll();
+
                 $roles_options = get_all_role();
                 
                 $form['account']['notify']['#default_value'] = TRUE;
                 $form['#attached']['library'][] = 'ldapconnector/ldapconnector_add_user';
                 $form['account']['mail']['#required'] = TRUE;
                 $form['account']['pass']['#disabled'] = TRUE;
-                $form['user_details'] = [
-                        '#type' => 'fieldset',
-                        '#title' => t('Informations Pastell'),
-                        '#tree' => TRUE,
-                        '#prefix' => '<div id="user-details-wrapper">',
-                        '#suffix' => '</div>',
-                        '#weight' => 99,
-                ];
+                // $form['user_details'] = [
+                //         '#type' => 'fieldset',
+                //         '#title' => t('Informations Pastell'),
+                //         '#tree' => TRUE,
+                //         '#prefix' => '<div id="user-details-wrapper">',
+                //         '#suffix' => '</div>',
+                //         '#weight' => 99,
+                // ];
 
-                $num_groups = $form_state->get('num_user_detail_groups') ?: 1;
+                // $num_groups = $form_state->get('num_user_detail_groups') ?: 1;
 
-                for ($i = 0; $i < $num_groups; $i++) {
-                        $form['user_details'][$i] = [
-                                '#type' => 'fieldset',
-                                '#title' => t('Entité Pastell @index', ['@index' => $i + 1]),
-                        ];
+                // for ($i = 0; $i < $num_groups; $i++) {
+                //         $form['user_details'][$i] = [
+                //                 '#type' => 'fieldset',
+                //                 '#title' => t('Entité Pastell @index', ['@index' => $i + 1]),
+                //         ];
 
-                        // $form['user_details'][$i]['field_entite'] = [
-                        //         '#type' => 'select',
-                        //         '#title' => t('Entité'),
-                        //         '#options' => $coll_options,
-                        //         '#required' => FALSE,
-                        //         '#multiple' => FALSE,
-
-                        // ];
-                        $form['user_details'][$i]['field_entite'] = [
-                                '#type' => 'entity_autocomplete',
-                                '#title' => t('Entité'),
-                                '#target_type' => 'taxonomy_term',
-                                '#selection_settings' => [
-                                    'target_bundles' => ['entite_pastell'], // Nom machine du vocabulaire
-                                ],
-                                '#default_value' => NULL,
-                                '#required' => FALSE,
-                                '#tags' => FALSE, // Pour ne pas permettre plusieurs termes
-                            ];
-                        $form['user_details'][$i]['field_role'] = [
-                                '#type' => 'checkboxes',
-                                '#title' => t('Rôle'),
-                                '#options' => $roles_options,
-                                '#required' => FALSE,
-                                '#multiple' => TRUE,
-                        ];
-                }
-                $form['actions']['add_user_detail_group'] = [
-                        '#type' => 'submit',
-                        '#value' => t('Ajouter une Entité pastell'),
-                        '#submit' => ['ldapconnector_add_user_detail_group'],
-                        '#ajax' => [
-                                'callback' => 'ldapconnector_add_user_detail_group_ajax_callback',
-                                'wrapper' => 'user-details-wrapper',
-                        ],
-                ];
+                //         $form['user_details'][$i]['field_entite'] = [
+                //                 '#type' => 'entity_autocomplete',
+                //                 '#title' => t('Entité'),
+                //                 '#target_type' => 'taxonomy_term',
+                //                 '#selection_settings' => [
+                //                     'target_bundles' => ['entite_pastell'], // Nom machine du vocabulaire
+                //                 ],
+                //                 '#default_value' => NULL,
+                //                 '#required' => FALSE,
+                //                 '#tags' => FALSE, // Pour ne pas permettre plusieurs termes
+                //             ];
+                //         $form['user_details'][$i]['field_role'] = [
+                //                 '#type' => 'checkboxes',
+                //                 '#title' => t('Rôle'),
+                //                 '#options' => $roles_options,
+                //                 '#required' => FALSE,
+                //                 '#multiple' => TRUE,
+                //         ];
+                // }
+                // $form['actions']['add_user_detail_group'] = [
+                //         '#type' => 'submit',
+                //         '#value' => t('Ajouter une Entité pastell'),
+                //         '#submit' => ['ldapconnector_add_user_detail_group'],
+                //         '#ajax' => [
+                //                 'callback' => 'ldapconnector_add_user_detail_group_ajax_callback',
+                //                 'wrapper' => 'user-details-wrapper',
+                //         ],
+                // ];
         }
 }
 
@@ -359,6 +351,7 @@ function ldapconnector_user_presave(\Drupal\Core\Entity\EntityInterface $entity)
 
         $json_user_details = json_encode($user_details);
         $entity->set('field_entite_role_pastell', $json_user_details);
+        
 }
 
 
@@ -692,8 +685,8 @@ function ldapconnector_user_insert($account)
                 ecv_ldap_group_add($account, $group_name, $groupes_applicatifs);
 
                 if (in_array('pastell', $groupes_applicatifs)) {
-                        $id_u = add_user_to_pastell($account);
-                        add_roles_to_pastell_user($account, $id_u);
+                        synchro_user_to_pastell();
+                        $messenger->addMessage('Utilisateur créé : cliquez <a href="/user/'.$account->id().'/edit?destination=/list_users"ici</a> pour ajouter les rôles Pastell ');
                 }
         }
 }
@@ -718,8 +711,7 @@ function ecv_ldap_group_add($account, $group_name, $groupes_applicatifs)
 
                         // Préparation des données
                         $filter = "(member=uid=" . $username . "," . OU_FOR_PEOPLE . "," . BASE_DN . ")";
-			
-			$attr = array('member');
+                        $attr = array('member');
 
                         // Vérification pour le groupe principal
                         $result = ldap_search($ldapconn, $group_dn, $filter, $attr);
@@ -747,25 +739,21 @@ function ecv_ldap_group_add($account, $group_name, $groupes_applicatifs)
                         }
 
                         foreach ($groupes_applicatifs as $applis) {
-
-				$addgroup_applicatif_ad['member'] = '';
                                 $applicatif_dn = 'cn=' . $applis . ',' . OU_FOR_GROUP . ',' . BASE_DN;
                                 // Vérification pour le groupe applicatif
-
                                 $result = ldap_search($ldapconn, $applicatif_dn, $filter, $attr);
                                 if ($result) {
                                         $data = ldap_get_entries($ldapconn, $result);
                                 }
-			       if ($data) {
+                                if ($data) {
                                         $nbresultats = $data["count"];
                                 }
                                 if ($nbresultats == 0) {
-					
                                         // Utilisateur non encore membre du groupe applicatif, ajoutons-le.
-                                        $members_applicatif = 'uid=' . $username . ',' . OU_FOR_PEOPLE . "," . BASE_DN;
+                                        $members_applicatif[] = 'uid=' . $username . ',' . OU_FOR_PEOPLE . "," . BASE_DN;
                                         $addgroup_applicatif_ad['member'] = $members_applicatif;
-					$add = ldap_mod_add($ldapconn, $applicatif_dn, $addgroup_applicatif_ad);
-                                      	if ($add) {
+                                        $add = ldap_mod_add($ldapconn, $applicatif_dn, $addgroup_applicatif_ad);
+                                        if ($add) {
                                                 $confirm_applicatif = 'L\'utilisateur ' . $username . ' a bien été synchronisé dans LDAP comme membre du groupe applicatif : ' . $applis;
                                                 $messenger->addMessage($confirm_applicatif);
                                         } else {
@@ -778,7 +766,6 @@ function ecv_ldap_group_add($account, $group_name, $groupes_applicatifs)
                                         $messenger->addMessage($confirm_applicatif);
                                 }
                         }
-			
                 } else {
                         $messenger->addMessage('Connexion LDAP échouée...');
                 }
@@ -1373,7 +1360,7 @@ function add_user_to_pastell($account)
                 'nom' => $account->get('field_nom')->getValue()[0]['value'],
                 'email' => $account->getEmail(),
                 'login' => $account->name->value,
-                'password' => 'GFYUrfhgueizfghigzd1564!'
+                'password' => 'vhezrpuihzeuihGYOGu!56'
         ]);
 
         $ch = curl_init();
@@ -1434,6 +1421,38 @@ function add_entite_pastell($denomiation, $type, $siren, $id_e){
         curl_close($ch);
         $result = json_decode($result);
         return $result->id_e;
+}
+function synchro_user_to_pastell(){
+        $messenger = \Drupal::messenger();
+        $query_params = http_build_query([
+                'id_ce' => '58',
+                'type' => 'Verification',
+                'action' => 'create-user'
+        ]);
+
+        $ch = curl_init();
+
+        $url = "https://pastelltest.ecollectivites.fr/api/action-connecteur-entite.php?" . $query_params;
+
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+        global $headers;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+        $messenger->addMessage("Création du user sur Pastell : " . $result);
+        if (curl_errno($ch)) {
+                drupal_set_message('Error:' . curl_error($ch));
+        }
+        curl_close($ch);
+        $result = json_decode($result);
+        return $result;
 }
 function add_roles_to_pastell_user($account, $id_u)
 {
