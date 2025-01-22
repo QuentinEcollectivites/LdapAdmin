@@ -120,54 +120,6 @@ function import_role_user_pastell()
     }
     return $result;
 }
-function import_entite_from_pastell()
-{
-    $ch = curl_init();
-
-    curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-entite.php");
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
-    curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-    curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
-
-    global $headers;
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-    $result = curl_exec($ch);
-    if (curl_errno($ch)) {
-        drupal_set_message('Error:' . curl_error($ch));
-    }
-    curl_close($ch);
-    $result = json_decode($result);
-    // Parcourir les données et construire les options du champ select.
-    foreach ($result as $item) {
-        $existing_terms = \Drupal::entityTypeManager()
-            ->getStorage('taxonomy_term')
-            ->loadByProperties([
-                'vid' => 'entite_pastell',
-                'name' => $item->denomination,
-            ]);
-
-        if (!empty($existing_terms)) {
-            \Drupal::messenger()->addMessage('Le terme "' . $item->denomination . '" existe déjà.', 'status');
-            continue;
-        }
-
-        // Créer un nouveau terme.
-        $term = Term::create([
-            'vid' => 'entite_pastell',
-            'name' => $item->denomination,
-            'field_id_e' => $item->id_e, // Champ personnalisé pour l'ID.
-        ]);
-
-        $term->save();
-
-        \Drupal::messenger()->addMessage('Terme créé : "' . $item->denomination . '" avec ID ' . $item->id_e, 'status');
-    }
-}
-
 
 function test_get_user_from_ldap()
 {
@@ -714,37 +666,6 @@ function ImportUserFromLDAP($file_path, $collectivite)
                 ldap_close($ldapconn);
 
 
-                $query_params = http_build_query([
-                    'prenom' => $prenom,
-                    'nom' => $nom,
-                    'email' => $mail,
-                    'login' => $username,
-                    'password' => '123456'
-                ]);
-
-                $ch = curl_init();
-
-                $url = "https://pastelltest.ecollectivites.fr/api/create-utilisateur.php?" . $query_params;
-
-                curl_setopt($ch, CURLOPT_URL, $url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-                curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
-                curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-                curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
-
-                global $headers;
-                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-                $result = curl_exec($ch);
-                $messenger->addMessage("Création de l'utilisateur sur Pastell : " . $result);
-                if (curl_errno($ch)) {
-                    drupal_set_message('Error:' . curl_error($ch));
-                }
-                curl_close($ch);
-                $result = json_decode($result);
-
                 $new_user = User::create();
                 $new_user->setUsername($username);
                 $new_user->setPassword(\Drupal::service('password_generator')->generate());
@@ -757,7 +678,6 @@ function ImportUserFromLDAP($file_path, $collectivite)
                 $message = 'L\'utilisateur Drupal avec uid "' . $username . '" a été créé.';
                 $messenger->addMessage($message);
                 $messenger->addMessage('Ajout des infos Pastell...');
-                $id_u = $result->id_u;
 
 
                 $groupes_applicatifs = [];
@@ -803,7 +723,6 @@ function ImportUserFromLDAP($file_path, $collectivite)
                 if (!empty($groupes_applicatifs)) {
                     $new_user->set('field_groupes_applicatifs', $groupes_applicatifs);
                 }
-                $new_user->set("field_id_utilisateur_pastell", $id_u);
 
                 $new_user->save();
             }

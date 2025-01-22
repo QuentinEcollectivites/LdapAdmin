@@ -64,6 +64,8 @@ form[action="/list_users"] .form--inline, form[action="/list_collectivites"] .fo
 position: relative;
 display: inline-block;
 opacity: 1;
+    font-size: unset;
+    font-family: unset;
 }
 
 .tooltip .tooltiptext {
@@ -109,7 +111,9 @@ border-style: solid;
 border-color: #555 transparent transparent transparent;
 }
 
-
+tbody{
+font-size: smaller;
+}
 .tooltip .tooltiptext::after {
 content: "";
 position: absolute;

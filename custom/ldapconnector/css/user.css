@@ -53,3 +53,26 @@ fieldset#edit-field-groupes-applicatifs--wrapper span{
 #user-details-wrapper{
         width: 100%;
 }
+a[href^="/user/"][href*="/contact"] {
+    display: none;
+}
+[class*="form-item--user-details-"][class*="-field-role-admin"],
+[class*="form-item--user-details-"][class*="-field-role-agent-actes-automatique"],
+[class*="form-item--user-details-"][class*="-field-role-agent-actes-generique"],
+[class*="form-item--user-details-"][class*="-field-role-agent-actes-generique-lecture"],
+[class*="form-item--user-details-"][class*="-field-role-agent-actes-rh"],
+[class*="form-item--user-details-"][class*="-field-role-agent-actes-rh-lecture"],
+[class*="form-item--user-details-"][class*="-field-role-agent-chorus"],
+[class*="form-item--user-details-"][class*="-field-role-agent-cmd-generique"],
+[class*="form-item--user-details-"][class*="-field-role-agent-helios-automatique"],
+[class*="form-item--user-details-"][class*="-field-role-agent-helios-cosoluce"],
+[class*="form-item--user-details-"][class*="-field-role-agent-helios-generique"],
+[class*="form-item--user-details-"][class*="-field-role-agent-helios-generique-lec"],
+[class*="form-item--user-details-"][class*="-field-role-agent-helios-lecture"],
+[class*="form-item--user-details-"][class*="-field-role-agent-pes-retour"],
+[class*="form-item--user-details-"][class*="-field-role-agent-technique-urbanisme"],
+[class*="form-item--user-details-"][class*="-field-role-mail-securise"],
+[class*="form-item--user-details-"][class*="-field-role-mail-securise-lecture"],
+[class*="form-item--user-details-"][class*="-field-role-pdf-generique"] {
+    display: none;
+}
