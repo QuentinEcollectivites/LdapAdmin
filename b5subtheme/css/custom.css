@@ -155,17 +155,31 @@ width: 20%!important;
 	overflow: hidden;
 	transition: width 0.2s cubic-bezier(0.42, 0, 0.58, 1);
 }
-
+.sidebar .menu-item {
+align-items: unset!important;
+}
+/*
+.sidebar:hover .menu-item {
+align-items: center!important;
+}
 .sidebar:hover {
 	width: 200px;
 }
-.sidebar:hover h5.text-white{
-	transform: unset;
-        position: unset;
-        left: unset;
-        bottom: unset;
-        transition: transform 0.1s;
-        padding-left: 12px;
+*/
+.menu-item .label{
+display: none;
+opacity: 0;
+  transition: opacity 0.5s ease-in;
+}
+
+.menu-item:hover .label{
+	display:block!important;
+	width: auto;
+    position: fixed;
+    left: 60px;
+    background-color: #1f3889;
+    padding: 0.2em 1em;
+    color: #FFF;
 }
 h5.text-white{
         transition: transform 0.1s;
@@ -182,6 +196,7 @@ h5.admin_groupe{
         left: -110px;
         bottom: 170px;
 }
+
 .menu-item:hover {
 	border: 1px solid white;
 }
@@ -228,4 +243,7 @@ h5.admin_groupe{
   display: inline-block;
   width: 16px;
   height: 16px;
+}
+#edit-relations, .js-form-type-vertical-tabs, #edit-roles--wrapper{
+display:none!important;
 }

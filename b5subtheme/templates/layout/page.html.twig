@@ -26,7 +26,7 @@
     </a>
     {% endif %}
 
-    {% if is_super_admin == 1 %}
+    {% if is_admin_pleiade == 1 or is_super_admin == 1 %}
     <a class="menu-item" href="/groupes_applicatifs">
       <span class="icon">
        <i class="fa-solid fa-layer-group"></i>
@@ -36,12 +36,13 @@
     {% endif %}
 
 {% if is_admin_pleiade == 1 or is_super_admin == 1 %}
-<a class="menu-item" href="https://pastelltest.ecollectivites.fr">
+<a class="menu-item" href="/admin/people/create?field_collectivite=238">
       <span class="icon">
-<i class="fa-solid fa-magnifying-glass"></i>
+<i class="fa-solid fa-user-gear"></i>
       </span>
-      <span class="label">Pastell</span>
+      <span class="label">Créer une agent technique</span>
     </a>
+
     {% endif %}
 
     <div class="d-flex flex-wrap" style="margin-top:auto;">

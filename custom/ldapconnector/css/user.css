@@ -28,7 +28,7 @@ div#edit-field-entite-role-pastell-wrapper,
 div#edit-account{
         display: flex;
         flex-wrap: wrap;
-        align-items: center;  
+        align-items: flex-start;  
 }
 div#edit-account>div, div#edit-field-nom-wrapper{
         padding: 0 1em 0 0;
@@ -62,7 +62,6 @@ a[href^="/user/"][href*="/contact"] {
 [class*="form-item--user-details-"][class*="-field-role-agent-actes-generique-lecture"],
 [class*="form-item--user-details-"][class*="-field-role-agent-actes-rh"],
 [class*="form-item--user-details-"][class*="-field-role-agent-actes-rh-lecture"],
-[class*="form-item--user-details-"][class*="-field-role-agent-chorus"],
 [class*="form-item--user-details-"][class*="-field-role-agent-cmd-generique"],
 [class*="form-item--user-details-"][class*="-field-role-agent-helios-automatique"],
 [class*="form-item--user-details-"][class*="-field-role-agent-helios-cosoluce"],
@@ -75,4 +74,19 @@ a[href^="/user/"][href*="/contact"] {
 [class*="form-item--user-details-"][class*="-field-role-mail-securise-lecture"],
 [class*="form-item--user-details-"][class*="-field-role-pdf-generique"] {
     display: none;
+}
+div#edit-field-nom-wrapper{
+padding: 0 0 0 1em;
+}
+form[action="/admin/people/create?field_collectivite=238"] div#edit-pass{
+display: flex!important;
+width: 100%;
+}
+
+.confirm-parent, .password-parent{
+width: 33%;
+}
+#edit-pass > div {
+width:32%;
+padding-right: 1em ;
 }

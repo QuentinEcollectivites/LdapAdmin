@@ -44,3 +44,7 @@ div#edit-roles{
 .admin_groupe .field--name-field-collectivite{
   pointer-events: none;
 }
+.text_danger_pastell{
+color: red;
+font-weight: bold;
+}

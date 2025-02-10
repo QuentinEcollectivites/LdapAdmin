@@ -17,21 +17,20 @@ use GuzzleHttp\Client;
 use Drupal\Component\Render\FormattableMarkup;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Drupal\taxonomy\Entity\Term;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+
 
 function ldapconnector_preprocess_views_view_field(&$variables)
 {
         // Vérifiez si c'est la vue que vous souhaitez cibler.
-        if (($variables['view']->id() == 'liste_des_utilisateurs' || $variables['view']->id() == 'user_by_collectivite' || $variables['view']->id() == 'user_by_applicatif') && $variables['field']->field == 'field_entite_role_pastell') {
+        if (($variables['view']->id() == 'list_users' || $variables['view']->id() == 'user_by_collectivite' || $variables['view']->id() == 'user_by_applicatif') && $variables['field']->field == 'field_entite_role_pastell') {
                 // Récupérez la valeur du champ.
                 $field_value = $variables['row']->_entity->get('field_entite_role_pastell')->value;
 
-                // Décoder la chaîne JSON en tableau associatif.
-                $field_value_array = json_decode($field_value, TRUE);
 
-                // Initialisez la sortie HTML.
+                $field_value_array = json_decode($field_value, TRUE);
                 $output_html = '';
 
-                // Parcourez les entités et leurs rôles.
                 if ($field_value_array && is_array($field_value_array)) {
                         foreach ($field_value_array as $entite_data) {
                                 if (isset($entite_data['field_entite'], $entite_data['field_role'])) {
@@ -71,6 +70,19 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
 
         if ($form_id == 'user_form') {
 
+                $user_edited = $form_state->getFormObject()->getEntity();
+                if ($user_edited->get('field_collectivite')->getValue()[0]["target_id"] == 238) {
+                        $id_u = $user_edited->get('field_id_utilisateur_pastell')->getValue()[0]['value'];
+                        $form['actions']['modif_password'] = [
+                                '#type' => 'submit',
+                                '#value' => t('Regénerer le mot de passe Pastell'),
+                                '#submit' => ['ldapconnector_modif_password_submit'], // Associer une fonction callback.
+                                '#weight' => 100, // Positionner après les autres boutons d'action.
+                                // Passer des données personnalisées via les paramètres.
+                                '#id_u' => $id_u,
+                        ];
+                }
+
                 $form['account']['cas_enabled']['#default_value'] = TRUE;
                 $form['account']['cas_enabled']['#disabled'] = TRUE;
 
@@ -81,7 +93,6 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
                         $form['#attached']['library'][] = 'ldapconnector/ldapconnector_add_user';
                         $form['account']['notify']['#default_value'] = TRUE;
                 }
-
 
 
                 $current_user_collectivite = $current_user->get('field_collectivite')->getValue()[0]["target_id"];
@@ -131,7 +142,7 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
                                 $num_groups = max($num_groups, count($user_details));
                         }
                 }
-                
+
 
                 $form_state->set('num_user_detail_groups', $num_groups);
 
@@ -140,35 +151,38 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
 
                         // Rechercher le terme de taxonomie correspondant
                         $query = \Drupal::entityQuery('taxonomy_term')
-                        ->accessCheck(TRUE)
-                        ->condition('vid', 'entite_pastell') // Limite la recherche au vocabulaire "entite_pastell"
-                        ->condition('field_id_e', $user_details[$i]['field_entite']); // Recherche la valeur dans le champ personnalisé
+                                ->accessCheck(TRUE)
+                                ->condition('vid', 'entite_pastell') // Limite la recherche au vocabulaire "entite_pastell"
+                                ->condition('field_id_e', $user_details[$i]['field_entite']); // Recherche la valeur dans le champ personnalisé
 
                         $tids = $query->execute(); // Exécute la requête et retourne les IDs de termes
 
                         // Charger le premier terme correspondant, s'il existe
                         $default_term = NULL;
                         if (!empty($tids)) {
-                        $term_id = reset($tids); // Prend le premier ID trouvé
-                        $default_term = Term::load($term_id); // Charge l'entité correspondante
-                        
+                                $term_id = reset($tids); // Prend le premier ID trouvé
+                                $default_term = Term::load($term_id); // Charge l'entité correspondante
+
                         }
                         $form['user_details'][$i] = [
                                 '#type' => 'fieldset',
                                 '#title' => t('Entité Pastell @index', ['@index' => $i + 1]),
+                                '#attributes' => ['class' => ['user-details-group'], 'data-index' => $i], // Ajout d'un identifiant unique
                         ];
-
+                        $form['user_details'][$i]['description'] = [
+                                '#markup' => '<p class="text_danger_pastell">' . t('Pensez à associer au moins un rôle à une collectivité') . '</p>',
+                        ];
                         $form['user_details'][$i]['field_entite'] = [
                                 '#type' => 'entity_autocomplete',
                                 '#title' => t('Entité'),
                                 '#target_type' => 'taxonomy_term',
                                 '#selection_settings' => [
-                                    'target_bundles' => ['entite_pastell'], // Nom machine du vocabulaire
+                                        'target_bundles' => ['entite_pastell'], // Nom machine du vocabulaire
                                 ],
                                 '#default_value' => $default_term,
                                 '#required' => FALSE,
-                                '#tags' => FALSE, 
-                            ];
+                                '#tags' => FALSE,
+                        ];
                         $form['user_details'][$i]['field_role'] = [
                                 '#type' => 'checkboxes',
                                 '#title' => t('Rôle'),
@@ -188,7 +202,6 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
                                 'wrapper' => 'user-details-wrapper',
                         ],
                 ];
-
                 $form['#submit'][] = 'custom_form_submit';
 
                 if ($form['field_entite_role_pastell']["widget"][0]['value']["#default_value"] !== null) {
@@ -203,19 +216,20 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
                                 $num_groups = count($user_details);
                                 for ($i = 0; $i < $num_groups; $i++) {
                                         $query = \Drupal::entityQuery('taxonomy_term')
-                                        ->accessCheck(TRUE)
-                                        ->condition('vid', 'entite_pastell') // Limite la recherche au vocabulaire "entite_pastell"
-                                        ->condition('field_id_e', $user_details[$i]['field_entite']); // Recherche la valeur dans le champ personnalisé
+                                                ->accessCheck(TRUE)
+                                                ->condition('vid', 'entite_pastell') // Limite la recherche au vocabulaire "entite_pastell"
+                                                ->condition('field_id_e', $user_details[$i]['field_entite']); // Recherche la valeur dans le champ personnalisé
 
                                         $tids = $query->execute(); // Exécute la requête et retourne les IDs de termes
 
                                         // Charger le premier terme correspondant, s'il existe
                                         $default_term = NULL;
                                         if (!empty($tids)) {
-                                        $term_id = reset($tids); // Prend le premier ID trouvé
-                                        $default_term = Term::load($term_id); // Charge l'entité correspondante
-                                        
+                                                $term_id = reset($tids); // Prend le premier ID trouvé
+                                                $default_term = Term::load($term_id); // Charge l'entité correspondante
+
                                         }
+
                                         $form['user_details'][$i]['field_entite']['#default_value'] = $default_term;
                                         $form['user_details'][$i]['field_role']['#default_value'] = $user_details[$i]['field_role'];
                                 }
@@ -248,50 +262,61 @@ function ldapconnector_form_alter(&$form, FormStateInterface $form_state, $form_
                                 }
                         }
                 } else {
-                       
                 }
 
                 $form['account']['notify']['#default_value'] = TRUE;
                 $form['#attached']['library'][] = 'ldapconnector/ldapconnector_add_user';
                 $form['account']['mail']['#required'] = TRUE;
                 $form['account']['pass']['#disabled'] = TRUE;
-		$form['actions']['submit']['#submit'][] = 'ldapconnector_user_redirect_to_edit';
+                $form['actions']['submit']['#submit'][] = 'ldapconnector_user_redirect_to_edit';
         }
 }
 
-function ldapconnector_user_redirect_to_edit(array &$form, FormStateInterface $form_state) {
-  $user = $form_state->getFormObject()->getEntity();
-
-  // Sauvegarde de l'utilisateur pour obtenir l'ID.
-  if ($user->isNew()) {
-    $user->save();
-  }
-
- // Vérifier si l'utilisateur a le groupe "Pastell" sélectionné.
-  $user_groups = $user->get('field_groupes_applicatifs')->getValue(); // Remplacez 'field_user_groups' par le nom exact du champ de groupe.
-  $has_pastell = false;
-  $user_coll = $user->get('field_collectivite')->getValue();
-
-  foreach ($user_groups as $group) {
-    var_dump($group);
-    if (isset($group['target_id']) && $group['target_id'] === '67') { // Remplacez 'pastell' par l'ID ou le nom réel du groupe.
-      $has_pastell = true;
-      break;
-    }
-  }
-  if ($has_pastell) {
-	$form_state->setRedirect('entity.user.edit_form', [
-    'user' => $user->id(),
-  ]);
-  }
-else
+function ldapconnector_modif_password_submit(array &$form, \Drupal\Core\Form\FormStateInterface $form_state)
 {
-  // Rediriger vers le formulaire d'édition de l'utilisateur nouvellement créé.
-	 $form_state->setRedirectUrl(\Drupal\Core\Url::fromUri('internal:/collectivite/'.$user_coll[0]["target_id"]));
-}
+        // Récupérer l'ID utilisateur transmis dans les paramètres.
+        $id_u = $form['actions']['modif_password']['#id_u'];
+
+        // Appeler la fonction personnalisée pour modifier le mot de passe.
+        modif_password_user_pastell($id_u);
+
+        // Message de confirmation.
+        \Drupal::messenger()->addMessage(t("Le mot de passe a été modifié avec succès pour l'utilisateur ID : @id", ['@id' => $id_u]));
 }
 
-function ldapconnector_add_user_detail_group(array &$form, FormStateInterface $form_state) {
+function ldapconnector_user_redirect_to_edit(array &$form, FormStateInterface $form_state)
+{
+        $user = $form_state->getFormObject()->getEntity();
+
+        // Sauvegarde de l'utilisateur pour obtenir l'ID.
+        if ($user->isNew()) {
+                $user->save();
+        }
+
+        // Vérifier si l'utilisateur a le groupe "Pastell" sélectionné.
+        $user_groups = $user->get('field_groupes_applicatifs')->getValue(); // Remplacez 'field_user_groups' par le nom exact du champ de groupe.
+        $has_pastell = false;
+        $user_coll = $user->get('field_collectivite')->getValue();
+
+        foreach ($user_groups as $group) {
+
+                if (isset($group['target_id']) && $group['target_id'] === '67') { // Remplacez 'pastell' par l'ID ou le nom réel du groupe.
+                        $has_pastell = true;
+                        break;
+                }
+        }
+        if ($has_pastell) {
+                $form_state->setRedirect('entity.user.edit_form', [
+                        'user' => $user->id(),
+                ]);
+        } else {
+                // Rediriger vers le formulaire d'édition de l'utilisateur nouvellement créé.
+                $form_state->setRedirectUrl(\Drupal\Core\Url::fromUri('internal:/collectivite/' . $user_coll[0]["target_id"]));
+        }
+}
+
+function ldapconnector_add_user_detail_group(array &$form, FormStateInterface $form_state)
+{
         $num_groups = $form_state->get('num_user_detail_groups');
         $form_state->set('num_user_detail_groups', $num_groups + 1);
         $form_state->setRebuild(TRUE);
@@ -301,85 +326,70 @@ function ldapconnector_add_user_detail_group_ajax_callback(array &$form, FormSta
 {
         return $form['user_details'];
 }
-/*
+
 function ldapconnector_user_presave(\Drupal\Core\Entity\EntityInterface $entity)
 {
+        // Vérifier si l'entité est un utilisateur.
+        if (!$entity instanceof User) {
+                return;
+        }
+        $messenger = \Drupal::messenger();
+        // Récupérer la valeur actuelle du champ pour éviter une réinitialisation involontaire.
+        $current_value = $entity->get('field_entite_role_pastell')->value;
 
-	if (!$entity instanceof \Drupal\user\Entity\User) {
-        return;
-    }
-
+        // Récupérer les données de la requête (uniquement pour les cas pertinents).
         $form_values = \Drupal::request()->request->all();
+        if (!isset($form_values['user_details'])) {
+                // Si aucune donnée pertinente n'est trouvée, conserver la valeur actuelle.
+                return;
+        }
+        $current_user_id = $entity->id();
         $user_details = $form_values['user_details'];
-
-        foreach ($user_details as $key => $details) {
+        foreach ($user_details as $key => &$details) {
                 $last_six_chars = substr($details['field_entite'], -6);
 
+                // Extraire le numéro entre parenthèses.
                 if (preg_match('/\((\d+)\)/', $last_six_chars, $matches)) {
                         $tid = $matches[1];
-                        
+
+                        // Charger le terme de taxonomie.
                         $term = Term::load($tid);
-                      
-                        if ($term && $term->bundle() === 'entite_pastell') { 
-                            $field_id_e = $term->get('field_id_e')->value ?? NULL;
-                
-                            $user_details[$key]['field_entite'] = $field_id_e;
+                        if ($term && $term->bundle() === 'entite_pastell') {
+                                // Récupérer la valeur du champ field_id_e.
+                                $field_id_e = $term->get('field_id_e')->value ?? NULL;
+                                $details['field_entite'] = $field_id_e;
                         } else {
-                            $user_details[$key]['field_entite'] = NULL;
+                                // Si le terme n'est pas valide, définir une valeur par défaut.
+                                $details['field_entite'] = NULL;
                         }
-                    }
+                }
+                
+                if ($details['field_role'] == NULL || $details['field_entite'] == "") {
+                        $messenger->addWarning("Attention, le rôle Pastell ou la collectivité n'a pas été défini !");                 
+                        
+                }
+                if($details['field_role'] == NULL && $details['field_entite'] == ""){
+                        unset($user_details[$key]);
+                 
+                }
         }
 
+        $user_details = array_values($user_details);
+
+        // Encoder les données mises à jour en JSON.
         $json_user_details = json_encode($user_details);
-        $entity->set('field_entite_role_pastell', $json_user_details);
-        
-}
-*/
-function ldapconnector_user_presave(\Drupal\Core\Entity\EntityInterface $entity) {
-    // Vérifier si l'entité est un utilisateur.
-    if (!$entity instanceof User) {
-        return;
-    }
 
-    // Récupérer la valeur actuelle du champ pour éviter une réinitialisation involontaire.
-    $current_value = $entity->get('field_entite_role_pastell')->value;
-
-    // Récupérer les données de la requête (uniquement pour les cas pertinents).
-    $form_values = \Drupal::request()->request->all();
-    if (!isset($form_values['user_details'])) {
-        // Si aucune donnée pertinente n'est trouvée, conserver la valeur actuelle.
-        return;
-    }
-
-    $user_details = $form_values['user_details'];
-
-    foreach ($user_details as $key => $details) {
-        $last_six_chars = substr($details['field_entite'], -6);
-
-        // Extraire le numéro entre parenthèses.
-        if (preg_match('/\((\d+)\)/', $last_six_chars, $matches)) {
-            $tid = $matches[1];
-
-            // Charger le terme de taxonomie.
-            $term = Term::load($tid);
-            if ($term && $term->bundle() === 'entite_pastell') {
-                // Récupérer la valeur du champ field_id_e.
-                $field_id_e = $term->get('field_id_e')->value ?? NULL;
-                $user_details[$key]['field_entite'] = $field_id_e;
-            } else {
-                // Si le terme n'est pas valide, définir une valeur par défaut.
-                $user_details[$key]['field_entite'] = NULL;
-            }
+        // Ne mettre à jour le champ que si la nouvelle valeur est différente.
+        if ($current_value !== $json_user_details) {
+                $entity->set('field_entite_role_pastell', $json_user_details);
         }
-    }
+	$collectivite_id = $entity->get('field_collectivite')->getValue()[0]["target_id"] ?? NULL;
+	if ($collectivite_id) {
+   		$response = new RedirectResponse('/collectivite/' . $collectivite_id);
+        	$response->send();
+        	return;
+    	}
 
-    // Encoder les données mises à jour en JSON.
-    $json_user_details = json_encode($user_details);
-
-    // Ne mettre à jour le champ que si la nouvelle valeur est différente.
-    if ($current_value !== $json_user_details) {
-        $entity->set('field_entite_role_pastell', $json_user_details);
-    }
 }
 
 function ldapconnector_form_user_register_form_alter(&$form, FormStateInterface $form_state, $form_id)
@@ -406,14 +416,9 @@ function ldapconnector_form_user_register_form_alter(&$form, FormStateInterface 
                         }
                 }
         }
+
         $request = \Drupal::request();
         $query = $request->query;
-        if ($query->has('name') && !$group_name) {
-
-                $form['account']['name']['#default_value'] = 'prenom.nom@' . $query->get('name');
-        } else {
-                $form['account']['name']['#default_value'] = 'prenom.nom@' . $group_name;
-        }
         if ($query->has('field_collectivite')) {
                 $selected_option_value = $query->get('field_collectivite');
                 foreach ($form['field_collectivite']['widget']['#options'] as $key => $value) {
@@ -579,7 +584,7 @@ function ecv_ldap_collectivite_del($description, $identifier, $group_name)
 function ldapconnector_taxonomy_term_insert($term)
 {
 
-        $sum = 0; 
+        $sum = 0;
         $field_identifier = '';
         if ($term->hasField('field_identifier')) {
                 $field_identifier_values = $term->get('field_identifier')->getValue();
@@ -596,16 +601,16 @@ function ldapconnector_taxonomy_term_insert($term)
                 }
         }
         $siren_array = str_split($field_siren);
-        
+
         foreach ($siren_array as $i => $chiffre) {
-            if ($i % 2 == 1) {
-                $chiffre2 = str_split((string)((int)$chiffre * 2));
-                foreach ($chiffre2 as $c) {
-                        $sum += (int)$c;
+                if ($i % 2 == 1) {
+                        $chiffre2 = str_split((string)((int)$chiffre * 2));
+                        foreach ($chiffre2 as $c) {
+                                $sum += (int)$c;
+                        }
+                } else {
+                        $sum += (int)$chiffre;
                 }
-            } else {
-                $sum += (int)$chiffre;
-            }
         }
 
         $field_type_entite = '';
@@ -615,7 +620,7 @@ function ldapconnector_taxonomy_term_insert($term)
                         $field_type_entite = $field_type_entite_values[0]['value'];
                 }
         }
-        
+
         // Récupérez le nom du terme.
         $term_name = $term->getName();
 
@@ -657,6 +662,14 @@ function ldapconnector_taxonomy_term_delete($term)
 function ldapconnector_user_insert($account)
 {
         $messenger = \Drupal::messenger();
+        if ($account->hasField('field_collectivite') && !$account->get('field_collectivite')->isEmpty()) {
+                if ($account->get('field_collectivite')->referencedEntities()[0]->get('field_identifier')->getValue()[0]['value'] == 'agenttechnique') {
+                        add_user_to_pastell($account);
+                        return;
+                }
+        }
+
+        $messenger = \Drupal::messenger();
         $current_user_id = \Drupal::currentUser()->id();
         $current_user = \Drupal\user\Entity\User::load($current_user_id);
         $current_user_grp_applis = $current_user->get('field_groupes_applicatifs')->getValue();
@@ -690,38 +703,49 @@ function ldapconnector_user_insert($account)
                         $term_current_groupes_applicatifs = \Drupal\taxonomy\Entity\Term::load($term_id_current_groupes_applicatifs);
                         $field_identifier_value = $term_current_groupes_applicatifs->get('field_identifier')->getValue()[0]['value'];
                         $groupes_applicatifs[] = $field_identifier_value;
-                } 
+                }
         } else {
                 // Gérer le cas où le champ field_groupes_applicatifs n'est pas défini.
                 $groupes_applicatifs = [];
         }
 
         if ($group_name != '') {
+
+
+                $groupes_applicatifs[] = $group_name;
+
+                //drupal_register_shutdown_function('ecv_ldap_user_add', $account);	                
+                //drupal_register_shutdown_function('ecv_ldap_group_add' , $account, $group_name, $groupes_applicatifs);
+
                 ecv_ldap_user_add($account);
-                ecv_ldap_group_add($account, $group_name, $groupes_applicatifs);
+
+                foreach ($groupes_applicatifs as $group_ldap) {
+                        ecv_ldap_group_add($account, $group_ldap);
+                }
 
                 if (in_array('pastell', $groupes_applicatifs)) {
                         synchro_user_to_pastell();
                 }
         }
 }
-function ecv_ldap_group_add($account, $group_name, $groupes_applicatifs)
-{
 
+function ecv_ldap_group_add($account, $group)
+{
         $messenger = \Drupal::messenger();
         $ldapconn = ldap_connect(SERVER, PORT) or die("Impossible de se connecter au serveur LDAP.");
         ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
-
+        $messages = [];
         if ($ldapconn) {
-
                 $ldapbind = ldap_bind($ldapconn, BIND_DN, BIND_PASS);
 
 
                 if ($ldapbind) {
+
                         $username = $account->name->value;
 
+
                         // Génération du DN pour le groupe principal
-                        $group_dn = 'cn=' . $group_name . ',' . OU_FOR_GROUP . ',' . BASE_DN;
+                        $group_dn = 'cn=' . $group . ',' . OU_FOR_GROUP . ',' . BASE_DN;
                         // Génération du DN pour le groupe applicatif
 
                         // Préparation des données
@@ -737,62 +761,34 @@ function ecv_ldap_group_add($account, $group_name, $groupes_applicatifs)
                                 $nbresultats = $data["count"];
                         }
                         if ($nbresultats == 0) {
+
                                 // Utilisateur non encore membre du groupe principal, ajoutons-le.
                                 $members = 'uid=' . $username . ',' . OU_FOR_PEOPLE . "," . BASE_DN;
                                 $addgroup_ad['member'] = $members;
-                                $messenger->addMessage($addgroup_ad['member']);
-				$add = ldap_mod_add($ldapconn, $group_dn, $addgroup_ad);
+                                $add = ldap_mod_add($ldapconn, $group_dn, $addgroup_ad);
                                 if ($add) {
-                                        $confirm = 'L\'utilisateur ' . $username . ' a bien été synchronisé dans LDAP comme membre du groupe : ' . $group_name;
-                                        $messenger->addMessage($confirm);
+                                        $messages[] = 'L\'utilisateur ' . $username . ' a bien été synchronisé dans LDAP comme membre du groupe : ' . $group;
                                 } else {
-                                        $confirm = 'Erreur lors de l\'ajout de ' . $username . ' comme membre du groupe : ' . $group_name;
-                                        $messenger->addMessage($confirm,);
+                                        $messages[] = 'Erreur lors de l\'ajout de ' . $username . ' comme membre du groupe : ' . $group;
                                 }
                         } else {
-                                $confirm = 'L\'utilisateur dispose déjà des droits et des entrées dans LDAP comme membre du groupe : ' . $group_name ;
-                                $messenger->addMessage($confirm);
-                        }
-
-                        foreach ($groupes_applicatifs as $applis) {
-                                $applicatif_dn = 'cn=' . $applis . ',' . OU_FOR_GROUP . ',' . BASE_DN;
-                                // Vérification pour le groupe applicatif
-                                $result = ldap_search($ldapconn, $applicatif_dn, $filter, $attr);
-                                if ($result) {
-                                        $data = ldap_get_entries($ldapconn, $result);
-                                }
-                                if ($data) {
-                                        $nbresultats = $data["count"];
-                                }
-                                if ($nbresultats == 0) {
-                                        // Utilisateur non encore membre du groupe applicatif, ajoutons-le.
-                                        $members_applicatif = 'uid=' . $username . ',' . OU_FOR_PEOPLE . "," . BASE_DN;
-                                        $addgroup_applicatif_ad['member'] = $members_applicatif;
-                                        $add = ldap_mod_add($ldapconn, $applicatif_dn, $addgroup_applicatif_ad);
-                                        if ($add) {
-                                                $confirm_applicatif = 'L\'utilisateur ' . $username . ' a bien été synchronisé dans LDAP comme membre du groupe applicatif : ' . $applis;
-                                                $messenger->addMessage($confirm_applicatif);
-                                        } else {
-						$ldap_error = ldap_error($ldapconn); // Récupération de l'erreur LDAP
-        					$confirm = 'Erreur lors de l\'ajout de ' . $username . ' comme membre du groupe : ' . $applis . ' - Détail : ' . $ldap_error;
-        					$messenger->addMessage($confirm);
-                                        }
-                                } else {
-                                        $confirm_applicatif = 'L\'utilisateur dispose déjà des droits et des entrées dans LDAP comme membre du groupe applicatif : ' . $applis ;
-                                        $messenger->addMessage($confirm_applicatif);
-                                }
+                                $messages[] = 'L\'utilisateur dispose déjà des droits et des entrées dans LDAP comme membre du groupe ' . $group;
                         }
                 } else {
-                        $messenger->addMessage('Connexion LDAP échouée...');
+                        $messages[] = 'Connexion LDAP échouée...';
                 }
         }
 
-
         ldap_close($ldapconn);
+        sleep(1);
+
+        if (!empty($messages)) {
+                $messenger->addMessage(implode("\n", $messages));
+        }
 }
+
 function ecv_ldap_user_add($account)
 {
-        // $password = $account->getPassword();
         $messenger = \Drupal::messenger();
         $ldapconn = ldap_connect(SERVER, PORT)
                 or die("Impossible de se connecter au serveur LDAP.");
@@ -820,7 +816,6 @@ function ecv_ldap_user_add($account)
                                         'sn' => $account->get('field_nom')->getValue()[0]['value'],
                                         'givenName' => $account->get('field_prenom')->getValue()[0]['value'],
                                         'mail' => $account->getEmail(),
-                                        // 'userPassword' => '{SSHA}' .($password),
                                         'objectClass' => ['inetOrgPerson', 'organizationalPerson', 'person'],
                                 ];
 
@@ -828,14 +823,17 @@ function ecv_ldap_user_add($account)
                                 if ($add) {
                                         $confirm = 'L\'utilisateur à bien été créé dans l\'annuaire LDAP sous le nom ' . $username;
                                         $messenger->addMessage($confirm);
+                                        \Drupal::logger('add_user_to_ldap')->info($confirm);
                                 } else {
                                         $confirm = 'L\'utilisateur ' . $username . ' n\'a pas pu être créé dans l\'annuaire';
                                         $messenger->addMessage($confirm);
+                                        \Drupal::logger('add_user_to_ldap')->error($confirm);
                                 }
                         }
                 }
         }
         ldap_close($ldapconn);
+        sleep(2);
 }
 
 function ecv_ldap_user_delete($username)
@@ -880,10 +878,26 @@ function ecv_ldap_user_delete($username)
 
 function ldapconnector_user_delete($account)
 {
+	$messenger = \Drupal::messenger();
         remove_role_pastell($account);
+	$results = get_id_u_pastell();
+        $id_u = 0;
+        $username = $account->name->value;
+        foreach ($results as $resultat) {
+
+                if ($username == $resultat->login) {
+                        $id_u = $resultat->id_u;
+			
+			$result = remove_user_pastell($id_u);
+                        $messenger->addMessage("Utilisateur supprimé de Pastell : ". json_encode($result));
+			break;
+                }
+		
+        }
         $username = $account->name->value;
         ecv_ldap_user_remove_from_groups($account);
         ecv_ldap_user_delete($username);
+
 }
 
 function ldapconnector_user_update($account)
@@ -896,7 +910,6 @@ function ldapconnector_user_update($account)
         foreach ($results as $resultat) {
 
                 if ($username == $resultat->login) {
-                        $messenger->addMessage("Récupération de l'utilisateur sur Pastell : " . $resultat->login);
                         $id_u = $resultat->id_u;
                         break;
                 }
@@ -1368,15 +1381,59 @@ function get_id_u_pastell()
         $results = json_decode($result);
         return $results;
 }
+function remove_user_pastell($id_u)
+{
+
+        $ch = curl_init();
+
+        $url = "https://pastelltest.ecollectivites.fr/api/delete-utilisateur.php?id_u=".$id_u;
+
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+        global $headers;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+        if (curl_errno($ch)) {
+                drupal_set_message('Error:' . curl_error($ch));
+        }
+        curl_close($ch);
+        $results = json_decode($result);
+        return $results;
+}
+
 function add_user_to_pastell($account)
 {
+
         $messenger = \Drupal::messenger();
+
+        // Fonction pour générer un mot de passe aléatoire
+        function generate_random_password()
+        {
+                $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?';
+                $password = '';
+                $chars_length = strlen($chars);
+                for ($i = 0; $i < 15; $i++) {
+                        $password .= $chars[random_int(0, $chars_length - 1)];
+                }
+                return $password;
+        }
+
+        // Générer un mot de passe aléatoire
+        $generated_password = generate_random_password();
+
         $query_params = http_build_query([
                 'prenom' => $account->get('field_prenom')->getValue()[0]['value'],
                 'nom' => $account->get('field_nom')->getValue()[0]['value'],
                 'email' => $account->getEmail(),
                 'login' => $account->name->value,
-                'password' => 'vhezrpuihzeuihGYOGu!56'
+                'password' => $generated_password,
         ]);
 
         $ch = curl_init();
@@ -1395,7 +1452,8 @@ function add_user_to_pastell($account)
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
         $result = curl_exec($ch);
-        $messenger->addMessage("Création de l'utilisateur sur Pastell : " . $result);
+        $messenger->addMessage("Mot de passe généré pour l'utilisateur Technique Pastell: " . $generated_password);
+        $messenger->addMessage("Récultat de la synchronisation Pastell : " . $result);
         if (curl_errno($ch)) {
                 drupal_set_message('Error:' . curl_error($ch));
         }
@@ -1403,9 +1461,60 @@ function add_user_to_pastell($account)
         $result = json_decode($result);
         $account->set('field_id_utilisateur_pastell', $result->id_u);
         $account->save();
-        return $result->id_u;
+        return "Utilisateur créé avec succès !";
 }
-function synchro_user_to_pastell(){
+function modif_password_user_pastell($id_u)
+{
+
+        $messenger = \Drupal::messenger();
+
+        // Fonction pour générer un mot de passe aléatoire
+        function generate_random_password()
+        {
+                $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!_.?';
+                $password = '';
+                $chars_length = strlen($chars);
+                for ($i = 0; $i < 15; $i++) {
+                        $password .= $chars[random_int(0, $chars_length - 1)];
+                }
+                return $password;
+        }
+
+        // Générer un mot de passe aléatoire
+        $generated_password = generate_random_password();
+
+        $query_params = http_build_query([
+                'id_u' => $id_u,
+                'password' => $generated_password,
+        ]);
+
+        $ch = curl_init();
+
+        $url = "https://pastelltest.ecollectivites.fr/api/modif-utilisateur.php?" . $query_params;
+
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+
+        global $headers;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+        $messenger->addMessage($result);
+        $messenger->addMessage("Mot de passe regénéré pour l'utilisateur Technique Pastell: " . $generated_password);
+        if (curl_errno($ch)) {
+                drupal_set_message('Error:' . curl_error($ch));
+        }
+        curl_close($ch);
+        $result = json_decode($result);
+        return "Mot de passe modifié avec succès !";
+}
+function synchro_user_to_pastell()
+{
         $messenger = \Drupal::messenger();
         $query_params = http_build_query([
                 'id_ce' => '58',
@@ -1429,7 +1538,7 @@ function synchro_user_to_pastell(){
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
         $result = curl_exec($ch);
-        $messenger->addMessage("Création du user sur Pastell : " . $result);
+        $messenger->addMessage("Résultat de la synchronisation Pastell : " . $result);
         if (curl_errno($ch)) {
                 drupal_set_message('Error:' . curl_error($ch));
         }
@@ -1489,7 +1598,6 @@ function remove_role_pastell($account)
         foreach ($results as $resultat) {
 
                 if ($email == $resultat->login) {
-                        $messenger->addMessage("Récupération de l'utilisateur sur Pastell : " . $resultat->login);
                         $id_u = $resultat->id_u;
                         $messenger->addMessage("Récupération de l'utilisateur sur Pastell, id_u = : " . $resultat->id_u);
                         break;
@@ -1546,49 +1654,47 @@ function remove_role_pastell($account)
 }
 function import_entite_from_pastell()
 {
-    $ch = curl_init();
+        $ch = curl_init();
 
-    curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-entite.php");
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
-    curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-    curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-entite.php");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
 
-    global $headers;
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        global $headers;
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
-    $result = curl_exec($ch);
-    if (curl_errno($ch)) {
-        drupal_set_message('Error:' . curl_error($ch));
-    }
-    curl_close($ch);
-    $result = json_decode($result);
-    // Parcourir les données et construire les options du champ select.
-    foreach ($result as $item) {
-        $existing_terms = \Drupal::entityTypeManager()
-            ->getStorage('taxonomy_term')
-            ->loadByProperties([
-                'vid' => 'entite_pastell',
-                'name' => $item->denomination,
-            ]);
-
-        if (!empty($existing_terms)) {
-            continue;
+        $result = curl_exec($ch);
+        if (curl_errno($ch)) {
+                drupal_set_message('Error:' . curl_error($ch));
         }
+        curl_close($ch);
+        $result = json_decode($result);
+        // Parcourir les données et construire les options du champ select.
+        foreach ($result as $item) {
+                $existing_terms = \Drupal::entityTypeManager()
+                        ->getStorage('taxonomy_term')
+                        ->loadByProperties([
+                                'vid' => 'entite_pastell',
+                                'name' => $item->denomination,
+                        ]);
 
-        // Créer un nouveau terme.
-        $term = Term::create([
-            'vid' => 'entite_pastell',
-            'name' => $item->denomination,
-            'field_id_e' => $item->id_e, // Champ personnalisé pour l'ID.
-        ]);
+                if (!empty($existing_terms)) {
+                        continue;
+                }
 
-        $term->save();
+                // Créer un nouveau terme.
+                $term = Term::create([
+                        'vid' => 'entite_pastell',
+                        'name' => $item->denomination,
+                        'field_id_e' => $item->id_e, // Champ personnalisé pour l'ID.
+                ]);
 
-        \Drupal::messenger()->addMessage('Terme créé : "' . $item->denomination . '" avec ID ' . $item->id_e, 'status');
-  
-  }
+                $term->save();
+
+                \Drupal::messenger()->addMessage('Terme créé : "' . $item->denomination . '" avec ID ' . $item->id_e, 'status');
+        }
 }
-

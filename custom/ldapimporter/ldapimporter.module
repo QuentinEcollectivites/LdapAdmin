@@ -316,7 +316,7 @@ function synchro_user_from_ldap()
                                     $messenger->addMessage('Ajout des infos Pastell...');
                                     $id_u = $resultat->id_u;
                                     $roles = get_role_user($id_u);
-                                    $messenger->addMessage("blabla : " . json_encode($roles));
+                                    $messenger->addMessage(json_encode($roles));
                                     foreach ($roles as $role) {
                                         if (!($role->role == 'aucun droit')) {
                                             $entry = [

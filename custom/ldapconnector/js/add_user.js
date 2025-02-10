@@ -4,6 +4,17 @@
     attach: function (context, settings) {
       
       document.addEventListener('DOMContentLoaded', function () {
+	document.body.addEventListener('click', function (event) {
+        	if (event.target.classList.contains('remove-group')) {
+            		event.preventDefault();
+            		var index = event.target.getAttribute('data-index');
+            		var fieldset = document.querySelector('[data-index="' + index + '"]');
+    			if (fieldset) {
+                		fieldset.remove();
+            		}
+		}
+    	});
+
         
         const nomInput = document.getElementById("edit-field-nom-0-value");
         const prenomInput = document.getElementById("edit-field-prenom-0-value");
@@ -43,7 +54,6 @@
     checkboxPastellActes.on('change', updatePastellCheckbox);
     checkboxPastellDocs.on('change', updatePastellCheckbox);
     checkboxPastellHelios.on('change', updatePastellCheckbox);
-    checkboxPastellChorus.on('change', updatePastellCheckbox);
     checkboxPastell.on('change', updatePastellCheckbox);
       function toggleFormVisibilityPastell() {
         if (checkboxPastell.is(':checked')) {
@@ -96,6 +106,22 @@
       checkboxPastellActes.on('change', toggleFormVisibilityPastellRole);
       checkboxPastellDocs.on('change',  toggleFormVisibilityPastellDocs);
       checkboxPastellHelios.on('change',  toggleFormVisibilityPastellHelios);
+	nomInput.addEventListener("input", handleInputValidation);
+        prenomInput.addEventListener("input", handleInputValidation);
+
+	function handleInputValidation(event) {
+          const input = event.target;
+          const value = input.value.trim();
+
+          // Vérifie si la valeur contient des chiffres ou fait moins de 3 caractères
+          if (/[\d]/.test(value) || value.length < 3) {
+            input.setCustomValidity("Le champ doit contenir au moins 3 lettres et ne doit pas inclure de chiffres.");
+          } else {
+            input.setCustomValidity(""); // Supprime le message d'erreur si la validation passe
+          }
+        }
+
+
       function updateNomUtilisateur() {
           let partieCollectivite;
       
@@ -109,8 +135,8 @@
             const parts = nomUtilisateurInput.split('@');
             partieCollectivite = parts[1];
           }
-          const nom = removeSpecialCharacters(nomInput.value);
-          const prenom = removeSpecialCharacters(prenomInput.value);
+          const nom = removeSpecialCharacters(nomInput.value, true);
+          const prenom = removeSpecialCharacters(prenomInput.value, true);
           
           const partiePrenomNom = `${prenom}.${nom}`.toLowerCase();
           document.getElementById("edit-field-nom-0-value").value = nom;
@@ -119,10 +145,12 @@
           document.getElementById("edit-cas-username").value = `${partiePrenomNom}@${partieCollectivite}`;
         }
       
-        // Fonction pour supprimer les caractères spéciaux
-        function removeSpecialCharacters(text) {
-          return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "");
-        }
+function removeSpecialCharacters(text, allowHyphens = false) {
+  return text
+    .normalize("NFD") // Supprime les accents
+    .replace(/[\u0300-\u036f]/g, "") // Supprime les diacritiques
+    .replace(/[^a-zA-Z]/g, ""); // Supprime tout sauf les lettres (a-z, A-Z)
+}
       });
     }
   };

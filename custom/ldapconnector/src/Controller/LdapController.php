@@ -145,44 +145,20 @@ public function autocompleteEntite($string = '') {
 
     return AccessResult::allowed();
   }
-
-function get_connexion() {
 /*
-$user_ids = \Drupal::entityQuery('user')
-    ->accessCheck(FALSE)
-    ->execute();
-  $users = User::loadMultiple($user_ids);
-
-  foreach ($users as $user) {
-    if ($user->hasField('field_groupes_applicatifs')) {
-      $values = $user->get('field_groupes_applicatifs')->getValue();
-
-      $unique_values = array_unique(array_column($values, 'target_id'));
-
-      $new_values = [];
-      foreach ($unique_values as $value) {
-        $new_values[] = ['target_id' => $value];
-      }
-
-      if (count($new_values) < count($values)) {
-        $user->set('field_groupes_applicatifs', $new_values);
-        $user->save();
-      }
-    }
-  }
-
-*/
+function get_connexion() {
 
     $api_url = 'https://pleiadetest.ecollectivites.fr/export/users/connexion';
     try {
       $client = \Drupal::httpClient();
-      $response = $client->get($api_url, ['timeout' => 30]);
+      $response = $client->get($api_url, ['timeout' => 50]);
       if ($response->getStatusCode() == 200) {
         $data = json_decode($response->getBody(), TRUE);
         foreach ($data as $item) {
           $username_from_api = $item['name'];
           $timestamp = $item['access'];
           $user = user_load_by_name($username_from_api);
+
           if ($user) {
             if($timestamp){
                 $user->set('access', $timestamp);
@@ -192,19 +168,91 @@ $user_ids = \Drupal::entityQuery('user')
         }
       }
     }
+
     catch (RequestException $e) {
       \Drupal::messenger()->addError('Erreur lors de la synchronisation des utilisateurs: ' . $e->getMessage());
     }
+
     $url = Url::fromRoute('<front>')->toString();
     return new RedirectResponse($url);
 
 }
+*/
 
-  /**
-   * Load all user entities.
-   *
-   * @return \Drupal\user\Entity\User[]
-   */
+/**
+ * Synchronise les données d'accès des utilisateurs depuis l'API.
+ * 
+ * @return \Symfony\Component\HttpFoundation\RedirectResponse
+ */
+function get_connexion() {
+    $api_url = 'https://pleiadetest.ecollectivites.fr/export/users/connexion';
+    
+    try {
+        $client = \Drupal::httpClient();
+        $response = $client->get($api_url, [
+            'timeout' => 50,
+        ]);
+
+        if ($response->getStatusCode() == 200) {
+            // Récupérer le contenu brut
+            $raw_content = $response->getBody()->getContents();
+            \Drupal::logger('data_debug')->notice('Contenu brut reçu: @content', [
+                '@content' => $raw_content
+            ]);
+
+            // Décoder le JSON
+            $data = json_decode($raw_content, TRUE);
+
+       // Vérifier les erreurs JSON
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                \Drupal::logger('data_debug')->error('Erreur JSON: @error', [
+                    '@error' => json_last_error_msg()
+                ]);
+                return;
+            }
+
+            // Déboguer chaque élément avant traitement
+            foreach ($data as $index => $item) {
+                \Drupal::logger('data_debug')->notice('Item @index brut: @item', [
+                    '@index' => $index,
+                    '@item' => print_r($item, TRUE)
+                ]);
+
+                if (!isset($item['access'])) {
+                    \Drupal::logger('data_debug')->error('Access manquant pour item @index', [
+                        '@index' => $index
+                    ]);
+                }
+
+                $username_from_api = $item['name'];
+                $timestamp = isset($item['access']) ? $item['access'] : 'manquant';
+
+                // Vérifier si l'utilisateur existe
+                $user = user_load_by_name($username_from_api);
+                if ($user && isset($item['access'])) {
+                    $ancien_timestamp = $user->get('access')->value;
+                    $user->set('access', $item['access']);
+                    $user->save();
+                    
+                    \Drupal::logger('data_debug')->notice(
+                        'Mise à jour utilisateur @user: ancien=@old, nouveau=@new', 
+                        [
+                            '@user' => $username_from_api,
+                            '@old' => $ancien_timestamp,
+                            '@new' => $item['access']
+                        ]
+                    );
+                }
+            }
+        }
+    } catch (RequestException $e) {
+        \Drupal::logger('data_debug')->error('Erreur de requête: @error', [
+            '@error' => $e->getMessage()
+        ]);
+    }
+    return new RedirectResponse(Url::fromRoute('<front>')->toString());
+}
+
 private function loadAllUsers()
   {
     $query = \Drupal::entityQuery('user')
