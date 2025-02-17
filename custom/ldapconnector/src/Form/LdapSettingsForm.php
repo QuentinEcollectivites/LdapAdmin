@@ -78,11 +78,20 @@ class LdapSettingsForm extends ConfigFormBase {
       '#title' => $this->t('ou Pour les applicatifs'),
       '#default_value' => $config->get('ou_for_apps', FALSE),
     ];
-    $form['url_lemon']['#prefix'] = '<div class="expli"><span class="explinum">1</span>URL de LemonLDAP pour envoyer la demande de mot de passe.</div>';
-    $form['url_lemon'] = [
+    $form['pastell_url'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('url LemonLDAP + /initializepasswordreset '),
-      '#default_value' => $config->get('url_lemon', FALSE),
+      '#title' => $this->t('Url Pastell pour appels api'),
+      '#default_value' => $config->get('pastell_url', FALSE),
+    ];
+    $form['pastell_user'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Id user api pastell'),
+      '#default_value' => $config->get('pastell_user', FALSE),
+    ];
+    $form['pastell_password'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Password user api Pastell'),
+      '#default_value' => $config->get('pastell_password', FALSE),
     ];
     return parent::buildForm($form, $form_state);
   }
@@ -99,7 +108,9 @@ class LdapSettingsForm extends ConfigFormBase {
       ->set('ou_for_group', $form_state->getValue('ou_for_group'))
       ->set('ou_for_people', $form_state->getValue('ou_for_people'))
       ->set('ou_for_apps', $form_state->getValue('ou_for_apps'))
-      ->set('url_lemon', $form_state->getValue('url_lemon'))
+      ->set('pastell_url', $form_state->getValue('pastell_url'))
+	->set('pastell_user', $form_state->getValue('pastell_user'))
+	->set('pastell_password', $form_state->getValue('pastell_password'))
       ->save();
   
     parent::submitForm($form, $form_state);

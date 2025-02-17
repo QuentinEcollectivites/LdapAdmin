@@ -21,10 +21,13 @@ use Drupal\taxonomy\Entity\Term;
 // //FONCTION PASTELL 
 function get_id_user_pastell()
 {
-
+$settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
     $ch = curl_init();
 
-    $url = "https://pastelltest.ecollectivites.fr/api/list-utilisateur.php";
+    $url = $url_pastell ."/api/list-utilisateur.php";
 
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -32,7 +35,7 @@ function get_id_user_pastell()
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
     curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-    curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+    curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
     global $headers;
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -48,16 +51,21 @@ function get_id_user_pastell()
 
 function get_role_user($id_u)
 {
+	$settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
 
-    $ch = curl_init();
+        $ch = curl_init();
+	$url = $url_pastell ."/api/list-role-utilisateur.php?id_u=" . $id_u;
 
-    curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u);
+    curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
     curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-    curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+    curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
     global $headers;
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -73,15 +81,20 @@ function get_role_user($id_u)
 }
 function import_role_user_pastell()
 {
+	 $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
     $ch = curl_init();
 
-    curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-roles.php");
+	$url = $url_pastell ."/api/list-roles.php";
+
+    curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
     curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-    curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+    curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
     global $headers;
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -280,14 +293,13 @@ function synchro_user_from_ldap()
 
             if ($user_count > 0) {
                 foreach ($data as $user_entry) {
-                    if ($counter >= 200) {
+                    if ($counter >= 20) {
                         break;  // Exit the loop after processing 20 users
                     }
                     // Vérifiez si l'utilisateur LDAP a un champ 'uid'. Pour ajouter un user particulier ---> && $user_entry['uid'][0] = "dev.test@formation"
                     if (isset($user_entry['uid'][0]) && isset($user_entry['mail'][0]) && isset($user_entry['sn'][0])) {
                         $ldap_uid = $user_entry['uid'][0];
                         $existing_user = user_load_by_name($ldap_uid);
-
                         if (!$existing_user) {
                             $message = 'L\'utilisateur LDAP avec uid "' . $ldap_uid . '" n\'existe pas dans Drupal. Création de l\'utilisateur...';
                             $messenger->addMessage($message);
@@ -315,10 +327,11 @@ function synchro_user_from_ldap()
                                     $messenger->addMessage($message);
                                     $messenger->addMessage('Ajout des infos Pastell...');
                                     $id_u = $resultat->id_u;
-                                    $roles = get_role_user($id_u);
+					$roles = get_role_user($id_u);
                                     $messenger->addMessage(json_encode($roles));
+				    $roleUser = [];
                                     foreach ($roles as $role) {
-                                        if (!($role->role == 'aucun droit')) {
+                                        if ($role->role !== 'aucun droit') {
                                             $entry = [
                                                 "field_entite" => $role->id_e,
                                                 "field_role" => [
@@ -332,7 +345,8 @@ function synchro_user_from_ldap()
                                     $new_user->set("field_id_utilisateur_pastell", $id_u);
                                     $new_user->set("field_entite_role_pastell", json_encode($roleUser));
                                     $new_user->save();
-                                    sleep(2);
+                                    sleep(0.3);
+
                                     break;
                                 }
                             }

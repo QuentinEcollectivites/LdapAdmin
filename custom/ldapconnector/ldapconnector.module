@@ -1,5 +1,10 @@
 <?php
 
+global $delete_user_pastell;
+global $delete_user_ldap ;
+$delete_user_pastell = 1;
+$delete_user_ldap = 1;
+
 global $headers;
 $headers = array();
 $headers[] = "Accept-Encoding: gzip, deflate, sdch, br";
@@ -18,6 +23,7 @@ use Drupal\Component\Render\FormattableMarkup;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Drupal\taxonomy\Entity\Term;
 use Symfony\Component\HttpFoundation\RedirectResponse;
+
 
 
 function ldapconnector_preprocess_views_view_field(&$variables)
@@ -879,31 +885,36 @@ function ecv_ldap_user_delete($username)
 function ldapconnector_user_delete($account)
 {
 	$messenger = \Drupal::messenger();
-        remove_role_pastell($account);
-	$results = get_id_u_pastell();
-        $id_u = 0;
-        $username = $account->name->value;
-        foreach ($results as $resultat) {
+	global $delete_user_pastell, $delete_user_ldap;
+	if($delete_user_pastell == 1){
+		remove_role_pastell($account);
+		$results = get_id_u_pastell();
+        	$id_u = 0;
+        	$username = $account->name->value;
+        	foreach ($results as $resultat) {
 
-                if ($username == $resultat->login) {
-                        $id_u = $resultat->id_u;
-			
-			$result = remove_user_pastell($id_u);
-                        $messenger->addMessage("Utilisateur supprimé de Pastell : ". json_encode($result));
-			break;
-                }
-		
-        }
+        	        if ($username == $resultat->login) {
+                	        $id_u = $resultat->id_u;
+				
+				$result = remove_user_pastell($id_u);
+                	        $messenger->addMessage("Utilisateur supprimé de Pastell : ". json_encode($result));
+				break;
+                	}
+        	}
+	}
         $username = $account->name->value;
-        ecv_ldap_user_remove_from_groups($account);
-        ecv_ldap_user_delete($username);
-
+ 	if($delete_user_ldap == 1){
+        	ecv_ldap_user_remove_from_groups($account);
+        	ecv_ldap_user_delete($username);
+	}
 }
 
 function ldapconnector_user_update($account)
 {
         $messenger = \Drupal::messenger();
-        remove_role_pastell($account);
+        global $delete_user_delete, $delete_user_ldap;
+ if($delete_user_pastell == 1){
+	remove_role_pastell($account);
         $results = get_id_u_pastell();
         $id_u = 0;
         $username = $account->name->value;
@@ -915,10 +926,12 @@ function ldapconnector_user_update($account)
                 }
         }
         add_roles_to_pastell_user($account, $id_u);
-        ecv_ldap_user_update($account);
-        ecv_ldap_user_group_update($account);
+	}
+	if($delete_user_ldap == 1){
+        	ecv_ldap_user_update($account);
+        	ecv_ldap_user_group_update($account);
+	}
 }
-
 function ecv_ldap_user_update($account)
 {
         if ($account->id() !== 1) {
@@ -1247,8 +1260,12 @@ function ecv_ldap_user_group_update($account)
 
 function detail_utilisateur_pastell($id_u)
 {
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
-        $url = "https://pastelltest.ecollectivites.fr/api/detail-utilisateur.php?id_u=" . $id_u;
+        $url = $url_pastell . "/api/detail-utilisateur.php?id_u=" . $id_u;
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -1256,7 +1273,7 @@ function detail_utilisateur_pastell($id_u)
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1272,8 +1289,12 @@ function detail_utilisateur_pastell($id_u)
 }
 function detail_entite_pastell($id_e)
 {
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
-        $url = "https://pastelltest.ecollectivites.fr/api/detail-entite.php?id_e=" . $id_e;
+        $url = $url_pastell . "/api/detail-entite.php?id_e=" . $id_e;
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -1281,7 +1302,7 @@ function detail_entite_pastell($id_e)
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1298,16 +1319,21 @@ function detail_entite_pastell($id_e)
 
 function get_all_coll()
 {
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $options[0] = 'Sélectionnez une entité';
         $ch = curl_init();
+        $url = $url_pastell . "/api/list-entite.php";
 
-        curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-entite.php");
+        curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1327,16 +1353,20 @@ function get_all_coll()
 }
 function get_all_role()
 {
-
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
+        $url = $url_pastell . "/api/list-roles.php";
 
-        curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-roles.php");
+        curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1357,10 +1387,13 @@ function get_all_role()
 }
 function get_id_u_pastell()
 {
-
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
 
-        $url = "https://pastelltest.ecollectivites.fr/api/list-utilisateur.php";
+        $url = $url_pastell . "/api/list-utilisateur.php";
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -1368,7 +1401,7 @@ function get_id_u_pastell()
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1383,10 +1416,13 @@ function get_id_u_pastell()
 }
 function remove_user_pastell($id_u)
 {
-
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
 
-        $url = "https://pastelltest.ecollectivites.fr/api/delete-utilisateur.php?id_u=".$id_u;
+        $url = $url_pastell . "/api/delete-utilisateur.php?id_u=".$id_u;
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -1394,7 +1430,7 @@ function remove_user_pastell($id_u)
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1435,10 +1471,13 @@ function add_user_to_pastell($account)
                 'login' => $account->name->value,
                 'password' => $generated_password,
         ]);
-
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
 
-        $url = "https://pastelltest.ecollectivites.fr/api/create-utilisateur.php?" . $query_params;
+        $url = $url_pastell . "/api/create-utilisateur.php?" . $query_params;
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -1446,7 +1485,7 @@ function add_user_to_pastell($account)
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1487,10 +1526,13 @@ function modif_password_user_pastell($id_u)
                 'id_u' => $id_u,
                 'password' => $generated_password,
         ]);
-
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
 
-        $url = "https://pastelltest.ecollectivites.fr/api/modif-utilisateur.php?" . $query_params;
+        $url = $url_pastell . "/api/modif-utilisateur.php?" . $query_params;
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -1498,7 +1540,7 @@ function modif_password_user_pastell($id_u)
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1521,10 +1563,13 @@ function synchro_user_to_pastell()
                 'type' => 'Verification',
                 'action' => 'create-user'
         ]);
-
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
 
-        $url = "https://pastelltest.ecollectivites.fr/api/action-connecteur-entite.php?" . $query_params;
+        $url = $url_pastell . "/api/action-connecteur-entite.php?" . $query_params;
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -1532,7 +1577,7 @@ function synchro_user_to_pastell()
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1563,9 +1608,13 @@ function add_roles_to_pastell_user($account, $id_u)
                                         'id_e' => $id_e,
                                         'role' => $role
                                 ]);
+                                $settings = \Drupal::config('ldapconnector.settings');
+                                $url_pastell = $settings->get('pastell_url');
+                                $user_pastell = $settings->get('pastell_user');
+                                $pwd_pastell = $settings->get('pastell_password');
                                 $ch = curl_init();
 
-                                $url = "https://pastelltest.ecollectivites.fr/api/add-several-role-utilisateur.php?" . $query_params;
+                                $url = $url_pastell . "/api/add-several-role-utilisateur.php?" . $query_params;
 
                                 curl_setopt($ch, CURLOPT_URL, $url);
                                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -1573,7 +1622,7 @@ function add_roles_to_pastell_user($account, $id_u)
                                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                                 curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
                                 curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-                                curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+                                curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
                                 global $headers;
                                 curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1603,18 +1652,20 @@ function remove_role_pastell($account)
                         break;
                 }
         }
-
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
 
-        $url = "https://pastelltest.ecollectivites.fr/api/list-role-utilisateur.php?id_u=" . $id_u;
+        $url = $url_pastell . "/api/list-role-utilisateur.php?id_u=" . $id_u;
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        // curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1631,7 +1682,7 @@ function remove_role_pastell($account)
 
                         $ch = curl_init();
 
-                        $url = "https://pastelltest.ecollectivites.fr/api/delete-role-utilisateur.php?id_u=" . $detail->id_u . "&id_e=" . $detail->id_e . "&role=" . $detail->role . "";
+                        $url = $url_pastell . "/api/delete-role-utilisateur.php?id_u=" . $detail->id_u . "&id_e=" . $detail->id_e . "&role=" . $detail->role . "";
                         $url = str_replace(' ', '%20', $url);
 
                         curl_setopt($ch, CURLOPT_URL, $url);
@@ -1640,7 +1691,7 @@ function remove_role_pastell($account)
                         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
                         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-                        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+                        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
                         global $headers;
                         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1654,15 +1705,20 @@ function remove_role_pastell($account)
 }
 function import_entite_from_pastell()
 {
+        $settings = \Drupal::config('ldapconnector.settings');
+        $url_pastell = $settings->get('pastell_url');
+        $user_pastell = $settings->get('pastell_user');
+        $pwd_pastell = $settings->get('pastell_password');
         $ch = curl_init();
+        $url = $url_pastell . "/api/list-entite.php";
 
-        curl_setopt($ch, CURLOPT_URL, "https://pastelltest.ecollectivites.fr/api/list-entite.php");
+        curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         //curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        curl_setopt($ch, CURLOPT_USERPWD, 'ecv85@pastell:ecoll85api');
+        curl_setopt($ch, CURLOPT_USERPWD, $user_pastell .":". $pwd_pastell);
 
         global $headers;
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
